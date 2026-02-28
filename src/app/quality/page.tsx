@@ -94,7 +94,7 @@ export default function QualityPage() {
         <p className="text-sm text-muted-foreground">Understand score trends and improve task outcomes.</p>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs uppercase tracking-wide">Average quality</CardDescription>

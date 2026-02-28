@@ -30,7 +30,7 @@ export function BottomTabs() {
 
 	return (
 		<nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
-			<div className="grid grid-cols-5 px-2 py-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+			<div className="grid grid-cols-5 px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
 				{TABS.map(({ href, label, icon: Icon }) => {
 					const active = isActivePath(pathname, href);
 					return (
@@ -39,11 +39,14 @@ export function BottomTabs() {
 							href={href}
 							aria-label={label}
 							className={cn(
-								"flex h-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground",
-								active && "bg-primary/10 text-primary",
+								"flex flex-col items-center justify-center gap-0.5 rounded-md py-1 text-muted-foreground transition-colors",
+								active && "text-primary",
 							)}
 						>
-							<Icon className="h-5 w-5" />
+							<Icon className={cn("h-5 w-5", active && "text-primary")} />
+							<span className={cn("text-[10px] leading-tight", active ? "font-medium text-primary" : "text-muted-foreground")}>
+								{label}
+							</span>
 						</Link>
 					);
 				})}

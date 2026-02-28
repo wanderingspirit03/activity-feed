@@ -19,19 +19,22 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
 	return (
 		<html lang="en" className="dark">
-			<body className={cn(inter.className, "min-h-screen bg-background text-foreground")}> 
+			<body className={cn(inter.className, "min-h-screen bg-background text-foreground")}>
 				<Providers>
-					<div className="min-h-screen bg-background text-foreground">
-						<div className="flex min-h-screen">
-							<div className="hidden md:block md:w-[240px] md:shrink-0">
-								<Sidebar />
-							</div>
-							<main className="flex-1 pb-20 md:pb-0">
-								<div className="mx-auto w-full max-w-[1600px] p-4 md:p-6">{children}</div>
-							</main>
-						</div>
-						<BottomTabs />
+					<div className="flex min-h-screen">
+						{/* Sidebar — desktop only */}
+						<aside className="hidden md:flex md:w-[240px] md:shrink-0 md:flex-col border-r border-border bg-card">
+							<Sidebar />
+						</aside>
+
+						{/* Main content */}
+						<main className="flex-1 min-w-0 overflow-x-hidden pb-20 md:pb-0">
+							{children}
+						</main>
 					</div>
+
+					{/* Bottom tabs — mobile only */}
+					<BottomTabs />
 				</Providers>
 			</body>
 		</html>

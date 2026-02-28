@@ -147,7 +147,7 @@ export default function SystemPage() {
         </TabsList>
 
         <TabsContent value="status" className="space-y-4">
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs uppercase tracking-wide">Redis connection</CardDescription>

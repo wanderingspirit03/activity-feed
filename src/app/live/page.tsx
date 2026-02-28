@@ -1,301 +1,221 @@
 "use client";
 
-import { useMemo } from "react";
-import {
-  Activity,
-  Bot,
-  Clock3,
-  Coffee,
-  Hammer,
-  Sparkles,
-} from "lucide-react";
-
-import { ConnectionStatus } from "@/components/feed/ConnectionStatus";
-import { RunCard } from "@/components/feed/RunCard";
-import { ActivityCard } from "@/components/feed/ActivityCard";
-import { PhaseTracker } from "@/components/feed/PhaseTracker";
-import { SpecialistAvatar } from "@/components/feed/SpecialistAvatar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, Clock3, Wifi, WifiOff, Wrench } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-} from "@/components/ai-elements/tool";
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-import { CodeBlock } from "@/components/ai-elements/code-block";
-import { cn } from "@/lib/utils";
-import { formatDuration, formatRelative } from "@/lib/format";
-import { useLiveStore } from "@/stores/live-store";
+import { useLiveStore, type RunData, type ActivityItem } from "@/stores/live-store";
 
-type ActivityLike = {
-  id?: string;
-  runId?: string;
-  title?: string;
-  description?: string;
-  timestamp?: number;
-  phase?: string;
-  isActive?: boolean;
-  toolName?: string;
-  toolArgs?: string;
-};
-
-type LiveRunLike = {
-  runId?: string;
-  task?: string;
-  phase?: string;
-  progress?: number;
-  startedAt?: number;
-  updatedAt?: number;
-  activities?: ActivityLike[];
-  specialist?: string;
-};
-
-function toArrayRuns(raw: unknown): LiveRunLike[] {
-  if (raw instanceof Map) return Array.from(raw.values()) as LiveRunLike[];
-  if (Array.isArray(raw)) return raw as LiveRunLike[];
-  if (raw && typeof raw === "object") return Object.values(raw as Record<string, LiveRunLike>);
-  return [];
+function formatTime(ts: number) {
+	const d = new Date(ts);
+	return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function toolStateFromActivity(activity: ActivityLike) {
-  const phase = String(activity.phase ?? "").toLowerCase();
-  if (phase.includes("error") || phase.includes("fail")) return "output-error" as const;
-  if (activity.isActive) return "input-available" as const;
-  return "output-available" as const;
+function formatDuration(ms: number) {
+	if (ms < 1000) return `${ms}ms`;
+	const s = ms / 1000;
+	if (s < 60) return `${s.toFixed(1)}s`;
+	const m = Math.floor(s / 60);
+	const rs = Math.floor(s % 60);
+	return `${m}m ${rs}s`;
 }
 
-function runStatusBadge(run: LiveRunLike) {
-  const phase = String(run.phase ?? "").toLowerCase();
-  if (phase.includes("error")) return <Badge className="bg-red-500/15 text-red-300 border-red-500/30">Failed</Badge>;
-  if (phase.includes("complete")) return <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">Completed</Badge>;
-  if (phase.includes("review")) return <Badge className="bg-purple-500/15 text-purple-300 border-purple-500/30">Reviewing</Badge>;
-  if (phase.includes("understand")) return <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/30">Thinking</Badge>;
-  return <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/30">Running</Badge>;
+function elapsed(startedAt: number) {
+	return formatDuration(Date.now() - startedAt);
 }
 
-function ActiveRunDetail({ run }: { run: LiveRunLike }) {
-  const activities = (run.activities ?? []).sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
-  const latestTimestamp = activities[0]?.timestamp ?? run.updatedAt;
-  const durationMs =
-    Number.isFinite(run.startedAt) && Number.isFinite(latestTimestamp)
-      ? Math.max(0, (latestTimestamp as number) - (run.startedAt as number))
-      : undefined;
+function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean }) {
+	const [expanded, setExpanded] = useState(false);
+	const isRunning = item.status === "running";
+	const duration = item.completedAt
+		? formatDuration(item.completedAt - item.startedAt)
+		: null;
 
-  return (
-    <Card className="border-border bg-card">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-2 min-w-0">
-            <CardTitle className="text-lg truncate">{run.task ?? "Task in progress"}</CardTitle>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Hammer className="size-3" />
-                {activities.length} steps
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Clock3 className="size-3" />
-                {durationMs ? formatDuration(durationMs) : "just started"}
-              </span>
-              <span>Updated {latestTimestamp ? formatRelative(latestTimestamp) : "now"}</span>
-            </div>
-          </div>
+	return (
+		<button
+			type="button"
+			onClick={() => setExpanded(!expanded)}
+			className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
+				isLatest && isRunning
+					? "border-blue-500/50 bg-blue-500/5"
+					: "border-neutral-800 bg-neutral-900/50 hover:bg-neutral-900"
+			}`}
+		>
+			<div className="flex items-center gap-2 min-w-0">
+				<Wrench className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
+				<span className="font-mono text-sm text-neutral-300 shrink-0">
+					{item.toolName || "tool"}
+				</span>
+				{!expanded && item.toolArgs && (
+					<span className="text-xs text-neutral-500 truncate min-w-0">
+						{item.toolArgs.slice(0, 80)}
+					</span>
+				)}
+				<span className="ml-auto shrink-0 flex items-center gap-2">
+					{duration && (
+						<span className="text-xs text-neutral-500">{duration}</span>
+					)}
+					{isRunning ? (
+						<span className="relative flex h-2 w-2">
+							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+							<span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+						</span>
+					) : item.status === "error" ? (
+						<Badge variant="destructive" className="text-[10px] px-1.5 py-0">error</Badge>
+					) : (
+						<span className="h-2 w-2 rounded-full bg-emerald-500" />
+					)}
+				</span>
+			</div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {run.specialist ? <SpecialistAvatar role={run.specialist} /> : null}
-            {runStatusBadge(run)}
-          </div>
-        </div>
+			{expanded && item.toolArgs && (
+				<div className="mt-2 rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
+					<pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap break-all">
+						{item.toolArgs}
+					</pre>
+				</div>
+			)}
+			{expanded && item.result && (
+				<div className="mt-1 rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
+					<pre className="text-xs font-mono text-emerald-400/70 whitespace-pre-wrap break-all">
+						{item.result.slice(0, 2000)}
+					</pre>
+				</div>
+			)}
+		</button>
+	);
+}
 
-        <div className="pt-2">
-          {/* cast to satisfy existing feed component's strict phase union */}
-          <PhaseTracker currentPhase={(run.phase as any) ?? "working"} />
-        </div>
-      </CardHeader>
+function RunSection({ run }: { run: RunData }) {
+	const tools = run.tools || [];
+	const isActive = run.status === "working" || run.status === "running";
 
-      <CardContent className="space-y-3">
-        <Reasoning defaultOpen={false}>
-          <ReasoningTrigger />
-          <ReasoningContent>
-            <p>
-              Live trace is updating in real time. The highlighted step below is the latest activity from this task.
-            </p>
-          </ReasoningContent>
-        </Reasoning>
-
-        <div className="space-y-2">
-          {activities.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
-              <Coffee className="size-4" />
-              Waiting for the first update…
-            </div>
-          ) : (
-            activities.map((activity, idx) => {
-              const isLatest = idx === 0;
-              const activityTs = activity.timestamp ?? run.updatedAt ?? run.startedAt;
-
-              return (
-                <div
-                  key={activity.id ?? `${run.runId}-${idx}`}
-                  className={cn(
-                    "rounded-md border p-3",
-                    isLatest && "border-l-4 border-l-blue-500 bg-blue-500/5",
-                  )}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{activity.title ?? "Step update"}</p>
-                      <p className="text-xs text-muted-foreground">{activityTs ? formatRelative(activityTs) : "now"}</p>
-                    </div>
-                    {isLatest ? <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/30">Current</Badge> : null}
-                  </div>
-
-                  <Tool defaultOpen={isLatest}>
-                    <ToolHeader
-                      title={activity.toolName ?? activity.title ?? "Tool step"}
-                      state={toolStateFromActivity(activity)}
-                      meta={<span className="text-[11px] text-muted-foreground">{activityTs ? formatRelative(activityTs) : "now"}</span>}
-                    />
-                    <ToolContent>
-                      {activity.description ? <p className="text-sm text-muted-foreground">{activity.description}</p> : null}
-                      {activity.toolArgs ? (
-                        <CodeBlock code={activity.toolArgs} language="json" />
-                      ) : (
-                        <CodeBlock
-                          code={JSON.stringify(
-                            {
-                              runId: run.runId,
-                              phase: activity.phase,
-                              timestamp: activityTs,
-                            },
-                            null,
-                            2,
-                          )}
-                          language="json"
-                        />
-                      )}
-                    </ToolContent>
-                  </Tool>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+	return (
+		<Card className="border-neutral-800 bg-neutral-950">
+			<CardHeader className="pb-3 border-b border-neutral-800">
+				<div className="flex items-start justify-between gap-2 min-w-0">
+					<div className="min-w-0 flex-1">
+						<CardTitle className="text-base font-medium truncate">
+							{run.taskPreview || run.runId}
+						</CardTitle>
+						<div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-neutral-500">
+							<span>{formatTime(run.startedAt)}</span>
+							<span>·</span>
+							<span>{elapsed(run.startedAt)}</span>
+							<span>·</span>
+							<span>{tools.length} tools</span>
+						</div>
+					</div>
+					<Badge
+						variant={isActive ? "default" : "secondary"}
+						className={`shrink-0 ${isActive ? "bg-blue-600" : ""}`}
+					>
+						{run.status || "unknown"}
+					</Badge>
+				</div>
+			</CardHeader>
+			<CardContent className="pt-3 space-y-1.5">
+				{tools.length === 0 ? (
+					<p className="text-sm text-neutral-500 italic">Waiting for tool calls...</p>
+				) : (
+					tools.slice(-20).map((item, i) => (
+						<ToolCard
+							key={item.id || `${run.runId}-${i}`}
+							item={item}
+							isLatest={i === tools.length - 1 && isActive}
+						/>
+					))
+				)}
+			</CardContent>
+		</Card>
+	);
 }
 
 export default function LivePage() {
-  const runsRaw = useLiveStore((s: any) => s.runs);
-  const isConnected = useLiveStore((s: any) => s.isConnected);
+	const runs = useLiveStore((s) => s.runs);
+	const isConnected = useLiveStore((s) => s.isConnected);
 
-  const runs = useMemo(() => {
-    const list = toArrayRuns(runsRaw);
-    return [...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  }, [runsRaw]);
+	// Force re-render every 5s for elapsed times
+	const [, setTick] = useState(0);
+	useEffect(() => {
+		const iv = setInterval(() => setTick((t) => t + 1), 5000);
+		return () => clearInterval(iv);
+	}, []);
 
-  const activeRuns = runs.filter((run) => {
-    const phase = String(run.phase ?? "").toLowerCase();
-    return !phase.includes("complete") && !phase.includes("error");
-  });
+	const runArray = useMemo(() => {
+		const arr = Array.from(runs.values());
+		arr.sort((a, b) => b.startedAt - a.startedAt);
+		return arr;
+	}, [runs]);
 
-  const recentActivity = useMemo(() => {
-    const items: ActivityLike[] = runs.flatMap((run) =>
-      (run.activities ?? []).map((a) => ({ ...a, runId: a.runId ?? run.runId })),
-    );
-    return items
-      .filter((a) => Number.isFinite(a.timestamp))
-      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-      .slice(0, 12);
-  }, [runs]);
+	const activeRuns = runArray.filter(
+		(r) => r.status === "working" || r.status === "running"
+	);
+	const recentRuns = runArray.filter(
+		(r) => r.status !== "working" && r.status !== "running"
+	);
 
-  return (
-    <main className="mx-auto max-w-7xl p-4 md:p-8 space-y-6">
-      <section className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold">Live Activity</h1>
-          <p className="text-sm text-muted-foreground">Watch tasks unfold in real time.</p>
-        </div>
+	return (
+		<div className="space-y-6 px-4 md:px-8 py-6 max-w-4xl">
+			{/* Header */}
+			<div className="flex items-center justify-between">
+				<div>
+					<h1 className="text-2xl md:text-3xl font-bold">Live</h1>
+					<p className="text-sm text-neutral-500 mt-1">
+						Real-time assistant activity stream.
+					</p>
+				</div>
+				<div className="flex items-center gap-2">
+					{isConnected ? (
+						<>
+							<Wifi className="h-4 w-4 text-emerald-500" />
+							<span className="text-xs text-emerald-500">Connected</span>
+						</>
+					) : (
+						<>
+							<WifiOff className="h-4 w-4 text-red-400" />
+							<span className="text-xs text-red-400">Disconnected</span>
+						</>
+					)}
+				</div>
+			</div>
 
-        <div className="flex items-center gap-3 rounded-md border px-3 py-2">
-          <ConnectionStatus isConnected={Boolean(isConnected)} />
-          <span className="text-sm">{isConnected ? "Connected" : "Reconnecting"}</span>
-          <Badge variant="secondary">{activeRuns.length} active</Badge>
-        </div>
-      </section>
+			{/* Active runs */}
+			{activeRuns.length > 0 && (
+				<div className="space-y-4">
+					<h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+						<Activity className="h-4 w-4" /> Active ({activeRuns.length})
+					</h2>
+					{activeRuns.map((run) => (
+						<RunSection key={run.runId} run={run} />
+					))}
+				</div>
+			)}
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <div className="space-y-4 xl:col-span-2">
-          {activeRuns.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Coffee className="size-4" />
-                  No active tasks right now.
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            activeRuns.map((run) => <ActiveRunDetail key={run.runId ?? Math.random()} run={run} />)
-          )}
-        </div>
+			{/* Recent runs */}
+			{recentRuns.length > 0 && (
+				<div className="space-y-4">
+					<h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+						<Clock3 className="h-4 w-4" /> Recent
+					</h2>
+					{recentRuns.slice(0, 10).map((run) => (
+						<RunSection key={run.runId} run={run} />
+					))}
+				</div>
+			)}
 
-        <Card className="xl:col-span-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Activity className="size-4" />
-              Activity Stream
-            </CardTitle>
-            <CardDescription>Newest events across all active tasks.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[560px] pr-2">
-              <div className="space-y-2">
-                {recentActivity.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    <Shimmer>Waiting for activity…</Shimmer>
-                  </div>
-                ) : (
-                  recentActivity.map((activity, idx) => (
-                    <div key={activity.id ?? `${activity.runId}-${idx}`}>
-                      <ActivityCard activity={activity as any} />
-                      {idx < recentActivity.length - 1 ? <Separator className="my-2" /> : null}
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Reuse existing feed RunCard pattern for quick compact previews */}
-      {runs.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-            <Bot className="size-4" />
-            Compact task previews
-          </h2>
-          <div className="space-y-4">
-            {runs.slice(0, 2).map((run) => (
-              <RunCard key={`preview-${run.runId}`} run={run as any} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <footer className="pt-2 text-xs text-muted-foreground flex items-center gap-2">
-        <Sparkles className="size-3" />
-        Real-time feed uses the live store directly (no polling).
-      </footer>
-    </main>
-  );
+			{/* Empty state */}
+			{runArray.length === 0 && (
+				<Card className="border-neutral-800 bg-neutral-950">
+					<CardContent className="py-16 text-center">
+						<Activity className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
+						<p className="text-neutral-500">No active runs.</p>
+						<p className="text-xs text-neutral-600 mt-1">
+							Activity will appear here when tasks start.
+						</p>
+					</CardContent>
+				</Card>
+			)}
+		</div>
+	);
 }
