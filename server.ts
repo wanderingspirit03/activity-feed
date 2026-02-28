@@ -5,8 +5,6 @@ import next from "next";
 import Redis from "ioredis";
 import { WebSocket, WebSocketServer } from "ws";
 
-import { getRedis } from "./src/lib/redis.js";
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const dev = process.env.NODE_ENV !== "production";
@@ -15,7 +13,6 @@ const port = parseInt(process.env.PORT || "3100", 10);
 const redisUrl = process.env.ACTOR_REDIS_URL ?? process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 
 const nextConf = {
-	output: "standalone",
 	reactStrictMode: true,
 	poweredByHeader: false,
 	eslint: { ignoreDuringBuilds: true },
@@ -31,7 +28,12 @@ const app = next({
 });
 const handle = app.getRequestHandler();
 
-const apiRedis = getRedis();
+// Inline Redis creation (avoids tsx module resolution issues in Docker)
+const apiRedis = new Redis(redisUrl, {
+	lazyConnect: false,
+	enableReadyCheck: true,
+	maxRetriesPerRequest: 1,
+});
 let streamRedis: Redis | null = null;
 let streamRedisConnected = false;
 let nextPrepared = false;
