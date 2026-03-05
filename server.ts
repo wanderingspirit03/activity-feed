@@ -68,10 +68,45 @@ type RunOverview = {
 	specialist?: string;
 };
 
+type OpsFeatureStatus = "pending" | "in-progress" | "done" | "failed" | "fix-needed";
+
+type OpsFeature = {
+	id: string;
+	title: string;
+	status: OpsFeatureStatus;
+	phase: number;
+	assignedModel: string;
+	attempts: number;
+};
+
+type OpsEvent = {
+	id: string;
+	timestamp: number;
+	type: string;
+	title: string;
+	featureId?: string;
+	status?: OpsFeatureStatus;
+	verdict?: string;
+};
+
+type OpsData = {
+	opId: string;
+	title: string;
+	status: string;
+	features: OpsFeature[];
+	currentPhase: number;
+	totalPhases: number;
+	startedAt: number;
+	updatedAt: number;
+	events: OpsEvent[];
+};
+
 type WsMessage =
 	| { type: "runs"; data: RunOverview[] }
 	| { type: "run.update"; data: RunOverview }
 	| { type: "activity"; data: ActivityItem }
+	| { type: "ops.list"; data: OpsData[] }
+	| { type: "ops.update"; data: OpsData }
 	| { type: "ping" };
 
 // ── Friendly names for tools ──────────────────────
@@ -98,6 +133,7 @@ const toolFriendlyNames: Record<string, { title: string; icon: string }> = {
 
 // ── State ──────────────────────────────────────────
 const runs = new Map<string, RunOverview>();
+const opsState = new Map<string, OpsData>();
 const clients = new Set<WebSocket>();
 
 const server = createServer((req, res) => {
@@ -160,6 +196,284 @@ function getSpecialistName(task: string): string {
 	if (t.includes("review") || t.includes("check") || t.includes("verify")) return "Reviewer";
 	if (t.includes("analyze") || t.includes("report") || t.includes("data")) return "Analyst";
 	return "Assistant";
+}
+
+function parseOpsFeatureStatus(value: unknown): OpsFeatureStatus {
+	if (value === "pending" || value === "in-progress" || value === "done" || value === "failed" || value === "fix-needed") {
+		return value;
+	}
+	if (value === "completed") return "done";
+	return "pending";
+}
+
+function normalizeOpsEvent(input: Partial<OpsEvent>, fallbackId: string, fallbackType: string): OpsEvent {
+	return {
+		id: input.id || fallbackId,
+		timestamp: Number(input.timestamp) || Date.now(),
+		type: input.type || fallbackType,
+		title: input.title || "Operation update",
+		featureId: input.featureId,
+		status: input.status,
+		verdict: input.verdict,
+	};
+}
+
+function getOpsStatus(op: OpsData): string {
+	if (op.features.length === 0) return op.status;
+	const hasFailed = op.features.some((feature) => feature.status === "failed");
+	const allDone = op.features.every((feature) => feature.status === "done");
+	if (allDone) return op.status === "failed" ? "failed" : "completed";
+	if (hasFailed && op.status === "completed") return "running";
+	return op.status;
+}
+
+function ensureOpState(opId: string, title?: string, ts?: number): OpsData {
+	const existing = opsState.get(opId);
+	if (existing) {
+		if (title && (!existing.title || existing.title === "Operation")) {
+			existing.title = title;
+		}
+		if (ts && ts > existing.updatedAt) {
+			existing.updatedAt = ts;
+		}
+		return existing;
+	}
+
+	const now = ts || Date.now();
+	const created: OpsData = {
+		opId,
+		title: title || "Operation",
+		status: "running",
+		features: [],
+		currentPhase: 1,
+		totalPhases: 1,
+		startedAt: now,
+		updatedAt: now,
+		events: [],
+	};
+	opsState.set(opId, created);
+	return created;
+}
+
+function upsertFeature(op: OpsData, feature: OpsFeature) {
+	const idx = op.features.findIndex((item) => item.id === feature.id);
+	if (idx >= 0) {
+		op.features[idx] = { ...op.features[idx], ...feature };
+		return;
+	}
+	op.features.push(feature);
+}
+
+function appendOpsEvent(op: OpsData, event: OpsEvent) {
+	const idx = op.events.findIndex((item) => item.id === event.id);
+	if (idx >= 0) {
+		op.events[idx] = event;
+	} else {
+		op.events.push(event);
+	}
+	op.events.sort((a, b) => a.timestamp - b.timestamp);
+	if (op.events.length > 100) {
+		op.events = op.events.slice(-100);
+	}
+}
+
+function applyOpsEvent(type: string, opId: string, payload: Record<string, any>, streamId: string, ts: number): OpsData {
+	const op = ensureOpState(opId, payload.title, ts);
+	op.updatedAt = Math.max(op.updatedAt, ts);
+
+	switch (type) {
+		case "ops.started": {
+			op.title = payload.title || op.title;
+			op.status = "running";
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: payload.title || op.title,
+			}, streamId, type));
+			break;
+		}
+		case "ops.feature.dispatched": {
+			const featureId = String(payload.featureId || payload.id || `feature-${streamId}`);
+			const phase = Number(payload.phase) || op.currentPhase || 1;
+			const existing = op.features.find((item) => item.id === featureId);
+			upsertFeature(op, {
+				id: featureId,
+				title: String(payload.title || existing?.title || featureId),
+				status: "in-progress",
+				phase,
+				assignedModel: String(payload.model || existing?.assignedModel || "worker"),
+				attempts: Math.max(Number(existing?.attempts || 0), 1),
+			});
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: String(payload.title || existing?.title || featureId),
+				featureId,
+			}, streamId, type));
+			break;
+		}
+		case "ops.feature.completed": {
+			const featureId = String(payload.featureId || payload.id || `feature-${streamId}`);
+			const existing = op.features.find((item) => item.id === featureId);
+			const status = parseOpsFeatureStatus(payload.status);
+			upsertFeature(op, {
+				id: featureId,
+				title: String(payload.title || existing?.title || featureId),
+				status,
+				phase: Number(existing?.phase || op.currentPhase || 1),
+				assignedModel: String(existing?.assignedModel || "worker"),
+				attempts: Number(existing?.attempts || 0),
+			});
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: String(payload.title || existing?.title || featureId),
+				featureId,
+				status,
+			}, streamId, type));
+			break;
+		}
+		case "ops.phase.advanced": {
+			const toPhase = Number(payload.toPhase) || Number(payload.phase) || op.currentPhase;
+			const totalPhases = Number(payload.totalPhases) || op.totalPhases;
+			op.currentPhase = Math.max(1, toPhase);
+			op.totalPhases = Math.max(op.currentPhase, totalPhases || op.totalPhases || 1);
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: `Step ${op.currentPhase}`,
+			}, streamId, type));
+			break;
+		}
+		case "ops.completed": {
+			op.status = String(payload.status || op.status || "completed");
+			op.title = payload.title || op.title;
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: payload.title || op.title,
+			}, streamId, type));
+			break;
+		}
+		case "ops.review": {
+			const featureId = payload.featureId ? String(payload.featureId) : undefined;
+			appendOpsEvent(op, normalizeOpsEvent({
+				id: streamId,
+				timestamp: ts,
+				type,
+				title: String(payload.title || featureId || op.title),
+				featureId,
+				verdict: typeof payload.verdict === "string" ? payload.verdict : undefined,
+			}, streamId, type));
+			break;
+		}
+	}
+
+	if (op.totalPhases < op.currentPhase) {
+		op.totalPhases = op.currentPhase;
+	}
+	if (op.features.length > 0 && op.totalPhases === 1) {
+		const maxPhase = op.features.reduce((max, feature) => Math.max(max, feature.phase || 1), 1);
+		op.totalPhases = Math.max(op.totalPhases, maxPhase);
+	}
+	op.status = getOpsStatus(op);
+	op.updatedAt = Math.max(op.updatedAt, Date.now());
+	opsState.set(op.opId, op);
+	return op;
+}
+
+function normalizeOpsSnapshot(snapshot: any): OpsData | null {
+	if (!snapshot || typeof snapshot !== "object" || !snapshot.opId) {
+		return null;
+	}
+
+	const now = Date.now();
+	const features: OpsFeature[] = Array.isArray(snapshot.features)
+		? snapshot.features.map((feature: any) => ({
+				id: String(feature?.id || ""),
+				title: String(feature?.title || feature?.id || "Feature"),
+				status: parseOpsFeatureStatus(feature?.status),
+				phase: Math.max(1, Number(feature?.phase) || 1),
+				assignedModel: String(feature?.assignedModel || "worker"),
+				attempts: Math.max(0, Number(feature?.attempts) || 0),
+			}))
+			.filter((feature: OpsFeature) => feature.id)
+		: [];
+
+	return {
+		opId: String(snapshot.opId),
+		title: String(snapshot.title || "Operation"),
+		status: String(snapshot.status || "running"),
+		features,
+		currentPhase: Math.max(1, Number(snapshot.currentPhase) || 1),
+		totalPhases: Math.max(1, Number(snapshot.totalPhases) || 1),
+		startedAt: Number(snapshot.startedAt) || now,
+		updatedAt: Number(snapshot.updatedAt) || now,
+		events: [],
+	};
+}
+
+async function syncOpsSnapshots() {
+	if (!streamRedis || shuttingDown) return;
+
+	try {
+		const hasActiveOp = Array.from(opsState.values()).some((op) => {
+			const status = op.status.toLowerCase();
+			return status === "running" || status === "paused" || status === "in-progress";
+		});
+		const activeSnapshot = await streamRedis.get("ops:active");
+		if (!hasActiveOp && !activeSnapshot) return;
+
+		let cursor = "0";
+		const keys: string[] = [];
+		do {
+			const [nextCursor, batch] = await streamRedis.scan(cursor, "MATCH", "ops:snapshot:*", "COUNT", "100");
+			cursor = nextCursor;
+			if (Array.isArray(batch) && batch.length > 0) {
+				keys.push(...batch);
+			}
+		} while (cursor !== "0");
+
+		if (keys.length === 0) return;
+
+		const values = await streamRedis.mget(...keys);
+		for (const rawSnapshot of values) {
+			if (!rawSnapshot) continue;
+			try {
+				const normalized = normalizeOpsSnapshot(JSON.parse(rawSnapshot));
+				if (!normalized) continue;
+				const existing = opsState.get(normalized.opId);
+				const merged: OpsData = {
+					...(existing ?? normalized),
+					...normalized,
+					events: existing?.events ?? [],
+				};
+				merged.status = getOpsStatus(merged);
+
+				const shouldBroadcast =
+					!existing ||
+					normalized.updatedAt >= existing.updatedAt ||
+					normalized.status !== existing.status ||
+					normalized.features.length !== existing.features.length;
+
+				opsState.set(merged.opId, merged);
+				if (shouldBroadcast) {
+					broadcast({ type: "ops.update", data: merged });
+				}
+			} catch {
+				// Ignore malformed snapshot payloads.
+			}
+		}
+	} catch (err: any) {
+		if (!shuttingDown) {
+			console.error("[ops-snapshot] sync error:", err?.message);
+		}
+	}
 }
 
 function translateEvent(raw: Record<string, string>, streamId: string): ActivityItem | null {

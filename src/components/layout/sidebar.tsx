@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, ListTodo, Radio, Settings, type LucideIcon } from "lucide-react";
+import { BarChart3, Home, ListTodo, Radio, Settings, Wrench, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
 	{ href: "/live", label: "Live", icon: Radio },
 	{ href: "/tasks", label: "Tasks", icon: ListTodo },
 	{ href: "/quality", label: "Quality", icon: BarChart3 },
+	{ href: "/ops", label: "Operations", icon: Wrench },
 	{ href: "/system", label: "System", icon: Settings },
 ];
 

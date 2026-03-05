@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { useLiveStore } from "@/stores/live-store";
+import { useOpsStore } from "@/stores/ops-store";
 
 const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -45,6 +46,9 @@ export function useWebsocket() {
 			try {
 				const parsed = JSON.parse(messageEvent.data as string);
 				addEvent(parsed);
+				if (parsed.type?.startsWith("ops.")) {
+					useOpsStore.getState().processEvent(parsed);
+				}
 			} catch {
 				// Ignore malformed WS payloads.
 			}
