@@ -70,27 +70,31 @@ function FeatureCard({ feature }: { feature: OpsFeature }) {
 	const isWorking = feature.status === "in-progress";
 
 	return (
-		<div className={cn("flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors", isWorking ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/50")}>
-			<div className="shrink-0">
-				<Icon className={cn("h-4 w-4", config.className.split(" ").find(c => c.startsWith("text-")), isWorking && "animate-spin")} />
-			</div>
-			<div className="flex-1 min-w-0">
-				<p className="text-sm font-medium text-foreground truncate">{feature.title}</p>
-				<div className="flex items-center gap-2 mt-1">
-					<span className="text-[11px] text-muted-foreground">Step {feature.phase}</span>
-					<span className="text-[11px] text-muted-foreground">·</span>
-					<span className="text-[11px] text-muted-foreground truncate">{feature.assignedModel || "worker"}</span>
-					{feature.attempts > 1 && (
-						<>
-							<span className="text-[11px] text-muted-foreground">·</span>
-							<span className="text-[11px] text-muted-foreground">Attempt {feature.attempts}</span>
-						</>
-					)}
+		<div className={cn("rounded-lg border px-3 py-2.5 transition-colors", isWorking ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/50")}>
+			<div className="flex items-start gap-3">
+				<div className="shrink-0 mt-0.5">
+					<Icon className={cn("h-4 w-4", config.className.split(" ").find(c => c.startsWith("text-")), isWorking && "animate-spin")} />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="flex items-start justify-between gap-2">
+						<p className="text-sm font-medium text-foreground break-words">{feature.title}</p>
+						<Badge variant="outline" className={cn("shrink-0 text-[10px] whitespace-nowrap", config.className)}>
+							{config.label}
+						</Badge>
+					</div>
+					<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+						<span className="text-[11px] text-muted-foreground">Step {feature.phase}</span>
+						<span className="text-[11px] text-muted-foreground hidden sm:inline">·</span>
+						<span className="text-[11px] text-muted-foreground truncate max-w-[180px] sm:max-w-none">{feature.assignedModel || "worker"}</span>
+						{feature.attempts > 1 && (
+							<>
+								<span className="text-[11px] text-muted-foreground">·</span>
+								<span className="text-[11px] text-muted-foreground">Attempt {feature.attempts}</span>
+							</>
+						)}
+					</div>
 				</div>
 			</div>
-			<Badge variant="outline" className={cn("shrink-0 text-[10px]", config.className)}>
-				{config.label}
-			</Badge>
 		</div>
 	);
 }
@@ -102,13 +106,13 @@ function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: numb
 	const activeStep = status === "completed" ? steps + 1 : currentPhase;
 
 	return (
-		<div className="flex items-center gap-1">
+		<div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
 			{Array.from({ length: steps }, (_, i) => {
 				const step = i + 1;
 				const isActive = step === activeStep;
 				const isDone = step < activeStep || status === "completed";
 				return (
-					<div key={step} className="flex items-center gap-1 flex-1">
+					<div key={step} className="flex items-center gap-1 flex-1 min-w-0">
 						<div className={cn(
 							"flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-medium shrink-0",
 							isDone ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400" :
@@ -118,7 +122,7 @@ function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: numb
 							{isDone ? <CheckCircle2 className="h-3 w-3" /> : step}
 						</div>
 						{i < steps - 1 && (
-							<div className={cn("h-[2px] flex-1 rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")} />
+							<div className={cn("h-[2px] flex-1 min-w-[12px] rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")} />
 						)}
 					</div>
 				);
@@ -137,35 +141,35 @@ function OpCard({ op }: { op: OpsData }) {
 	const config = statusConfig[op.status] ?? statusConfig.planning;
 
 	return (
-		<Card>
-			<CardHeader className="pb-4">
-				<div className="flex items-start justify-between gap-3">
+		<Card className="overflow-hidden">
+			<CardHeader className="pb-4 px-3 sm:px-6">
+				<div className="flex items-start justify-between gap-2">
 					<div className="min-w-0 flex-1">
-						<CardTitle className="text-lg">{op.title}</CardTitle>
-						<CardDescription className="mt-1 font-mono text-xs">{op.opId}</CardDescription>
+						<CardTitle className="text-base sm:text-lg leading-snug break-words">{op.title}</CardTitle>
+						<CardDescription className="mt-1 font-mono text-[11px] sm:text-xs truncate">{op.opId}</CardDescription>
 					</div>
 					<Badge variant="outline" className={cn("shrink-0 uppercase tracking-wider text-[10px]", config.className)}>
 						{config.label}
 					</Badge>
 				</div>
 
-				<div className="mt-4 rounded-lg border border-border bg-card/50 p-3">
+				<div className="mt-3 sm:mt-4 rounded-lg border border-border bg-card/50 p-2 sm:p-3">
 					<StepTracker currentPhase={op.currentPhase} totalPhases={op.totalPhases} status={op.status} />
 				</div>
 
-				<div className="mt-3 space-y-1.5">
-					<div className="flex items-center justify-between text-xs text-muted-foreground">
+				<div className="mt-2 sm:mt-3 space-y-1.5">
+					<div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground">
 						<span>Progress</span>
 						<span className="tabular-nums">
 							{doneCount}/{totalCount} done
 							{failedCount > 0 && <span className="text-red-400 ml-1">· {failedCount} failed</span>}
 						</span>
 					</div>
-					<Progress value={progress} className="h-2" />
+					<Progress value={progress} className="h-1.5 sm:h-2" />
 				</div>
 			</CardHeader>
 
-			<CardContent className="space-y-1.5 pt-0">
+			<CardContent className="space-y-1.5 pt-0 px-3 sm:px-6">
 				{op.features.length === 0 ? (
 					<p className="text-sm text-muted-foreground py-4 text-center">Workers are getting ready…</p>
 				) : (
@@ -183,22 +187,22 @@ function Timeline({ events }: { events: OpsEvent[] }) {
 
 	return (
 		<Card>
-			<CardHeader className="pb-3">
+			<CardHeader className="pb-3 px-3 sm:px-6">
 				<CardTitle className="text-sm">Live Timeline</CardTitle>
 			</CardHeader>
-			<CardContent>
-				<ScrollArea className="h-[400px]">
+			<CardContent className="px-3 sm:px-6">
+				<ScrollArea className="h-[280px] sm:h-[400px]">
 					{sorted.length === 0 ? (
 						<p className="text-xs text-muted-foreground py-8 text-center">Waiting for updates…</p>
 					) : (
 						<div className="space-y-2 pr-3">
 							{sorted.map(event => (
-								<div key={event.id} className="flex items-start justify-between gap-2 rounded-md border border-border bg-card/50 px-2.5 py-2">
+								<div key={event.id} className="flex items-start justify-between gap-2 rounded-md border border-border bg-card/50 px-2 sm:px-2.5 py-1.5 sm:py-2">
 									<div className="flex items-start gap-2 min-w-0">
 										<span className="text-sm leading-none shrink-0">{eventEmoji(event.type, event.status)}</span>
-										<p className="text-xs text-foreground">{eventLabel(event)}</p>
+										<p className="text-[11px] sm:text-xs text-foreground break-words">{eventLabel(event)}</p>
 									</div>
-									<span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+									<span className="text-[10px] text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
 										{formatDistanceToNow(event.timestamp, { addSuffix: true })}
 									</span>
 								</div>
@@ -218,25 +222,25 @@ export default function OpsPage() {
 	const latestOp = ops[0];
 
 	return (
-		<div className="space-y-6 px-4 py-6 md:px-8">
+		<div className="space-y-4 sm:space-y-6 px-3 py-4 sm:px-4 md:px-8 sm:py-6 pb-24 md:pb-6">
 			<header>
-				<div className="flex items-center gap-3">
-					<Wrench className="h-5 w-5 text-muted-foreground" />
-					<h1 className="text-xl font-semibold tracking-tight">Operations</h1>
+				<div className="flex items-center gap-2 sm:gap-3">
+					<Wrench className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
+					<h1 className="text-lg sm:text-xl font-semibold tracking-tight">Operations</h1>
 					{latestOp && (
-						<Badge variant="outline" className={cn("ml-auto", (statusConfig[latestOp.status] ?? statusConfig.planning).className)}>
+						<Badge variant="outline" className={cn("ml-auto text-[10px] sm:text-xs", (statusConfig[latestOp.status] ?? statusConfig.planning).className)}>
 							{latestOp.status}
 						</Badge>
 					)}
 				</div>
-				<p className="mt-1 text-sm text-muted-foreground">Live progress of autonomous code operations</p>
+				<p className="mt-1 text-xs sm:text-sm text-muted-foreground">Live progress of autonomous code operations</p>
 			</header>
 
 			{ops.length === 0 ? (
 				<Card>
-					<CardContent className="flex flex-col items-center justify-center py-16 text-center">
-						<div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-border">
-							<Sparkles className="h-5 w-5 text-muted-foreground" />
+					<CardContent className="flex flex-col items-center justify-center py-12 sm:py-16 text-center">
+						<div className="mb-3 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-dashed border-border">
+							<Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
 						</div>
 						<p className="text-sm text-foreground">No operations running</p>
 						<p className="mt-1 text-xs text-muted-foreground">
@@ -245,7 +249,7 @@ export default function OpsPage() {
 					</CardContent>
 				</Card>
 			) : (
-				<div className="grid gap-4 lg:grid-cols-3">
+				<div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
 					<section className="space-y-4 lg:col-span-2">
 						{ops.map((op: OpsData) => <OpCard key={op.opId} op={op} />)}
 					</section>

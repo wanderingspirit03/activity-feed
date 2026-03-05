@@ -31,7 +31,7 @@ export function BottomTabs() {
 
 	return (
 		<nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
-			<div className="grid grid-cols-5 px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+			<div className="grid grid-cols-6 px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
 				{TABS.map(({ href, label, icon: Icon }) => {
 					const active = isActivePath(pathname, href);
 					return (
