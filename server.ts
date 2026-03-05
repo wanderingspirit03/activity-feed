@@ -561,6 +561,16 @@ function processEvent(fields: string[], streamId: string) {
 		// best effort
 	}
 
+	// Handle ops-specific events — apply to opsState and broadcast
+	const rawType = raw.type || "";
+	if (rawType.startsWith("ops.")) {
+		const opId = parsedData.opId || raw.runId || "unknown";
+		const ts = Number(raw.ts) || Date.now();
+		const updated = applyOpsEvent(rawType, opId, parsedData, streamId, ts);
+		broadcast({ type: "ops.update", data: updated });
+		// Also continue processing for the general activity feed
+	}
+
 	// Normalize producer event types to UI translator event types
 	const typeMap: Record<string, string> = {
 		tool_start: "tool.start",
@@ -758,6 +768,12 @@ function installWsHandlers() {
 		const allRuns = Array.from(runs.values());
 		ws.send(JSON.stringify({ type: "runs", data: allRuns }));
 
+		// Send current ops state
+		const allOps = Array.from(opsState.values());
+		if (allOps.length > 0) {
+			ws.send(JSON.stringify({ type: "ops.list", data: allOps }));
+		}
+
 		// Ping every 30s
 		const pingInterval = setInterval(() => {
 			if (ws.readyState === WebSocket.OPEN) {
@@ -874,6 +890,21 @@ async function main() {
 				console.error("[redis-stream] failed to start listener:", err);
 			}
 		});
+
+		// Sync ops snapshots every 5 seconds
+		const opsInterval = setInterval(() => {
+			void syncOpsSnapshots().catch((err) => {
+				if (!shuttingDown) {
+					console.error("[ops-snapshot] periodic sync error:", err?.message);
+				}
+			});
+		}, 5000);
+		// Initial sync
+		void syncOpsSnapshots();
+
+		// Clean up on shutdown
+		process.once("SIGTERM", () => clearInterval(opsInterval));
+		process.once("SIGINT", () => clearInterval(opsInterval));
 	} catch (err) {
 		console.error("[server] failed to start:", err);
 		process.exit(1);
