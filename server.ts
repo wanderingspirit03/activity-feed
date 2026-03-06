@@ -70,6 +70,15 @@ type RunOverview = {
 
 type OpsFeatureStatus = "pending" | "in-progress" | "done" | "failed" | "fix-needed";
 
+type ToolActivity = {
+	id: string;
+	toolName: string;
+	toolArgs: string;
+	status: "running" | "success" | "error";
+	startedAt: number;
+	completedAt?: number;
+};
+
 type OpsFeature = {
 	id: string;
 	title: string;
@@ -77,6 +86,7 @@ type OpsFeature = {
 	phase: number;
 	assignedModel: string;
 	attempts: number;
+	toolActivity: ToolActivity[];
 };
 
 type OpsEvent = {
@@ -135,6 +145,8 @@ const toolFriendlyNames: Record<string, { title: string; icon: string }> = {
 const runs = new Map<string, RunOverview>();
 const opsState = new Map<string, OpsData>();
 const clients = new Set<WebSocket>();
+const featureToolActivity = new Map<string, ToolActivity[]>();
+const workerRunToFeature = new Map<string, string>();
 
 const server = createServer((req, res) => {
 	const pathname = (req.url || "").split("?")[0];
@@ -258,10 +270,14 @@ function ensureOpState(opId: string, title?: string, ts?: number): OpsData {
 function upsertFeature(op: OpsData, feature: OpsFeature) {
 	const idx = op.features.findIndex((item) => item.id === feature.id);
 	if (idx >= 0) {
-		op.features[idx] = { ...op.features[idx], ...feature };
+		op.features[idx] = {
+			...op.features[idx],
+			...feature,
+			toolActivity: feature.toolActivity ?? op.features[idx].toolActivity ?? [],
+		};
 		return;
 	}
-	op.features.push(feature);
+	op.features.push({ ...feature, toolActivity: feature.toolActivity ?? [] });
 }
 
 function appendOpsEvent(op: OpsData, event: OpsEvent) {
@@ -275,6 +291,69 @@ function appendOpsEvent(op: OpsData, event: OpsEvent) {
 	if (op.events.length > 100) {
 		op.events = op.events.slice(-100);
 	}
+}
+
+function attachToolActivityToFeature(op: OpsData, featureId: string) {
+	const idx = op.features.findIndex((item) => item.id === featureId);
+	if (idx < 0) return;
+	op.features[idx] = {
+		...op.features[idx],
+		toolActivity: featureToolActivity.get(featureId) ?? [],
+	};
+}
+
+function findFeatureById(featureId: string): { op: OpsData; feature: OpsFeature } | null {
+	for (const op of opsState.values()) {
+		const feature = op.features.find((item) => item.id === featureId);
+		if (feature) {
+			return { op, feature };
+		}
+	}
+	return null;
+}
+
+function resolveFeatureIdForToolEvent(raw: Record<string, string>, parsedData: Record<string, any>): string | null {
+	const featureId =
+		typeof parsedData.featureId === "string"
+			? parsedData.featureId
+			: typeof raw.featureId === "string"
+				? raw.featureId
+				: null;
+	if (featureId) return featureId;
+
+	const runId =
+		typeof parsedData.runId === "string"
+			? parsedData.runId
+			: typeof raw.runId === "string"
+				? raw.runId
+				: null;
+	if (!runId) return null;
+
+	return workerRunToFeature.get(runId) ?? null;
+}
+
+function upsertFeatureToolActivity(featureId: string, activity: ToolActivity) {
+	const current = featureToolActivity.get(featureId) ?? [];
+	const index = current.findIndex((item) => item.id === activity.id);
+	const next = [...current];
+	if (index >= 0) {
+		const existing = next[index];
+		next[index] = {
+			...existing,
+			...activity,
+			startedAt: existing.startedAt,
+			completedAt: activity.completedAt ?? existing.completedAt,
+		};
+	} else {
+		next.push(activity);
+	}
+	featureToolActivity.set(featureId, next.slice(-10));
+
+	const found = findFeatureById(featureId);
+	if (!found) return;
+	attachToolActivityToFeature(found.op, featureId);
+	found.op.updatedAt = Date.now();
+	broadcast({ type: "ops.update", data: found.op });
 }
 
 function applyOpsEvent(type: string, opId: string, payload: Record<string, any>, streamId: string, ts: number): OpsData {
@@ -297,6 +376,10 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 			const featureId = String(payload.featureId || payload.id || `feature-${streamId}`);
 			const phase = Number(payload.phase) || op.currentPhase || 1;
 			const existing = op.features.find((item) => item.id === featureId);
+			const workerRunId = typeof payload.workerRunId === "string" ? payload.workerRunId : null;
+			if (workerRunId) {
+				workerRunToFeature.set(workerRunId, featureId);
+			}
 			upsertFeature(op, {
 				id: featureId,
 				title: String(payload.title || existing?.title || featureId),
@@ -304,6 +387,7 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 				phase,
 				assignedModel: String(payload.model || existing?.assignedModel || "worker"),
 				attempts: Math.max(Number(existing?.attempts || 0), 1),
+				toolActivity: featureToolActivity.get(featureId) ?? existing?.toolActivity ?? [],
 			});
 			appendOpsEvent(op, normalizeOpsEvent({
 				id: streamId,
@@ -325,6 +409,7 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 				phase: Number(existing?.phase || op.currentPhase || 1),
 				assignedModel: String(existing?.assignedModel || "worker"),
 				attempts: Number(existing?.attempts || 0),
+				toolActivity: featureToolActivity.get(featureId) ?? existing?.toolActivity ?? [],
 			});
 			appendOpsEvent(op, normalizeOpsEvent({
 				id: streamId,
@@ -401,6 +486,7 @@ function normalizeOpsSnapshot(snapshot: any): OpsData | null {
 				phase: Math.max(1, Number(feature?.phase) || 1),
 				assignedModel: String(feature?.assignedModel || "worker"),
 				attempts: Math.max(0, Number(feature?.attempts) || 0),
+				toolActivity: featureToolActivity.get(String(feature?.id || "")) ?? [],
 			}))
 			.filter((feature: OpsFeature) => feature.id)
 		: [];
@@ -583,6 +669,12 @@ function processEvent(fields: string[], streamId: string) {
 		async_task_started: "subagent.done", // not exact, but close enough for activity feed
 	};
 	raw.type = typeMap[raw.type] || raw.type;
+	if (typeof parsedData.runId === "string") {
+		raw.runId = parsedData.runId;
+	}
+	if (typeof parsedData.featureId === "string") {
+		raw.featureId = parsedData.featureId;
+	}
 
 	// Extract tool name and args from parsed data payload
 	raw.toolName = parsedData.tool || parsedData.toolName || "";
@@ -620,6 +712,22 @@ function processEvent(fields: string[], streamId: string) {
 
 	const type = raw.type || "";
 	const runId = raw.runId || "unknown";
+
+	if (type === "tool.start" || type === "tool.done" || type === "tool.error") {
+		const featureId = resolveFeatureIdForToolEvent(raw, parsedData);
+		if (featureId) {
+			const startedAt = Number(raw.ts) || Date.now();
+			const activity: ToolActivity = {
+				id: `${runId}:${raw.toolName || "tool"}`,
+				toolName: raw.toolName || "tool",
+				toolArgs: raw.toolArgs || "",
+				status: type === "tool.start" ? "running" : type === "tool.done" ? "success" : "error",
+				startedAt,
+				completedAt: type === "tool.start" ? undefined : startedAt,
+			};
+			upsertFeatureToolActivity(featureId, activity);
+		}
+	}
 
 	// Handle run.start — create the run
 	if (type === "run.start") {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, ListTodo, Radio, Settings, Wrench, type LucideIcon } from "lucide-react";
+import { BarChart3, ClipboardList, Home, ListTodo, Radio, Settings, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,8 +16,8 @@ const TABS: TabItem[] = [
 	{ href: "/", label: "Home", icon: Home },
 	{ href: "/live", label: "Live", icon: Radio },
 	{ href: "/tasks", label: "Tasks", icon: ListTodo },
+	{ href: "/ops/history", label: "History", icon: ClipboardList },
 	{ href: "/quality", label: "Quality", icon: BarChart3 },
-	{ href: "/ops", label: "Operations", icon: Wrench },
 	{ href: "/system", label: "System", icon: Settings },
 ];
 
@@ -31,27 +31,27 @@ export function BottomTabs() {
 
 	return (
 		<nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
-			<div className="grid grid-cols-6 px-1 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-				{TABS.map(({ href, label, icon: Icon }) => {
-					const active = isActivePath(pathname, href);
+			<ul className="grid grid-cols-6">
+				{TABS.map((item) => {
+					const Icon = item.icon;
+					const active = isActivePath(pathname, item.href);
+
 					return (
-						<Link
-							key={href}
-							href={href}
-							aria-label={label}
-							className={cn(
-								"flex flex-col items-center justify-center gap-0.5 rounded-md py-1 text-muted-foreground transition-colors",
-								active && "text-primary",
-							)}
-						>
-							<Icon className={cn("h-5 w-5", active && "text-primary")} />
-							<span className={cn("text-[10px] leading-tight", active ? "font-medium text-primary" : "text-muted-foreground")}>
-								{label}
-							</span>
-						</Link>
+						<li key={item.href}>
+							<Link
+								href={item.href}
+								className={cn(
+									"flex h-16 flex-col items-center justify-center gap-1 text-[11px]",
+									active ? "text-primary" : "text-muted-foreground",
+								)}
+							>
+								<Icon className={cn("size-4", active && "text-primary")} />
+								<span className="truncate">{item.label}</span>
+							</Link>
+						</li>
 					);
 				})}
-			</div>
+			</ul>
 		</nav>
 	);
 }

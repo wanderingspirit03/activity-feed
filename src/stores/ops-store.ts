@@ -4,6 +4,15 @@ import { create } from "zustand";
 
 export type OpsFeatureStatus = "pending" | "in-progress" | "done" | "failed" | "fix-needed";
 
+export type ToolActivity = {
+	id: string;
+	toolName: string;
+	toolArgs: string;
+	status: "running" | "success" | "error";
+	startedAt: number;
+	completedAt?: number;
+};
+
 export type OpsFeature = {
 	id: string;
 	title: string;
@@ -11,6 +20,7 @@ export type OpsFeature = {
 	phase: number;
 	assignedModel: string;
 	attempts: number;
+	toolActivity?: ToolActivity[];
 };
 
 export type OpsEvent = {

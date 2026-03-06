@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, ListTodo, Radio, Settings, Wrench, type LucideIcon } from "lucide-react";
+import { BarChart3, ClipboardList, Home, ListTodo, Radio, Settings, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,8 +16,8 @@ const NAV_ITEMS: NavItem[] = [
 	{ href: "/", label: "Home", icon: Home },
 	{ href: "/live", label: "Live", icon: Radio },
 	{ href: "/tasks", label: "Tasks", icon: ListTodo },
+	{ href: "/ops/history", label: "History", icon: ClipboardList },
 	{ href: "/quality", label: "Quality", icon: BarChart3 },
-	{ href: "/ops", label: "Operations", icon: Wrench },
 	{ href: "/system", label: "System", icon: Settings },
 ];
 
@@ -30,37 +30,34 @@ export function Sidebar() {
 	const pathname = usePathname();
 
 	return (
-		<aside className="sticky top-0 flex h-screen w-full flex-col border-r border-border bg-card">
+		<aside className="fixed inset-y-0 left-0 hidden w-[240px] flex-col border-r border-border bg-card md:flex">
 			<div className="flex items-center gap-2 border-b border-border px-4 py-4">
-				<span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
-				<p className="text-sm font-semibold tracking-wide text-foreground">Control Center</p>
+				<span className="inline-block h-2 w-2 rounded-full bg-primary" />
+				<p className="text-sm font-semibold tracking-wide">Control Center</p>
 			</div>
 
 			<nav className="flex-1 space-y-1 px-3 py-4">
-				{NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-					const active = isActivePath(pathname, href);
+				{NAV_ITEMS.map((item) => {
+					const active = isActivePath(pathname, item.href);
+					const Icon = item.icon;
+
 					return (
 						<Link
-							key={href}
-							href={href}
+							key={item.href}
+							href={item.href}
 							className={cn(
-								"flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-								active && "bg-primary/10 text-primary",
+								"flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+								active
+									? "bg-primary/15 text-primary"
+									: "text-muted-foreground hover:bg-muted hover:text-foreground",
 							)}
 						>
-							<Icon className="h-4 w-4" />
-							<span>{label}</span>
+							<Icon className="size-4" />
+							<span>{item.label}</span>
 						</Link>
 					);
 				})}
 			</nav>
-
-			<div className="border-t border-border px-4 py-3">
-				<div className="flex items-center gap-2 text-xs text-muted-foreground">
-					<span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
-					<span>Connected</span>
-				</div>
-			</div>
 		</aside>
 	);
 }
