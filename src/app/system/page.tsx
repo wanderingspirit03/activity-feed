@@ -17,6 +17,7 @@ import {
 import { useCron, useHealth, useMemory } from "@/hooks/use-api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -60,6 +61,83 @@ type EpisodeLike = {
   content?: string;
 };
 
+type DiskEntry = {
+  name: string;
+  percent: number | null;
+  details: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function parsePercent(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value >= 0 && value <= 1) return clampPercent(value * 100);
+    return clampPercent(value);
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/-?\d+(\.\d+)?/);
+    if (!match) return null;
+    const num = Number(match[0]);
+    if (!Number.isFinite(num)) return null;
+
+    if (!value.includes("%") && num >= 0 && num <= 1) {
+      return clampPercent(num * 100);
+    }
+    return clampPercent(num);
+  }
+
+  return null;
+}
+
+function parseCount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const match = value.match(/\d+/);
+    if (!match) return null;
+    const num = Number(match[0]);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function getAny(obj: Record<string, unknown> | null | undefined, keys: string[]): unknown {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    if (key in obj) return obj[key];
+  }
+  return undefined;
+}
+
+function formatPercentLabel(value: number | null): string {
+  if (value == null) return "N/A";
+  return `${Math.round(value)}%`;
+}
+
+function formatUptime(value: unknown): string {
+  if (value == null) return "Not reported";
+  if (typeof value === "string" && value.trim()) return value;
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const totalSeconds = Math.max(0, Math.floor(value));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  return String(value);
+}
+
 function toneFromValue(value: unknown): "good" | "warn" | "bad" {
   const text = String(value ?? "").toLowerCase();
   if (text.includes("error") || text.includes("down") || text.includes("critical") || text.includes("fail")) return "bad";
@@ -72,6 +150,14 @@ function toneBadge(value: unknown) {
   if (tone === "good") return <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">Healthy</Badge>;
   if (tone === "warn") return <Badge className="bg-yellow-500/15 text-yellow-300 border-yellow-500/30">Watch</Badge>;
   return <Badge className="bg-red-500/15 text-red-300 border-red-500/30">Issue</Badge>;
+}
+
+function processDotClass(status: unknown): string {
+  const s = String(status ?? "").toLowerCase();
+  if (s.includes("running") || s.includes("ok") || s.includes("healthy") || s.includes("active")) return "bg-emerald-400";
+  if (s.includes("warn") || s.includes("stale") || s.includes("degraded")) return "bg-yellow-400";
+  if (s.includes("fail") || s.includes("error") || s.includes("down")) return "bg-red-400";
+  return "bg-slate-400";
 }
 
 function niceSchedule(job: JobLike) {
@@ -97,6 +183,51 @@ function statusPill(status?: string) {
   return <Badge variant="secondary">Unknown</Badge>;
 }
 
+function getDiskEntries(raw: unknown): DiskEntry[] {
+  if (!isRecord(raw)) return [];
+
+  const entries: DiskEntry[] = [];
+
+  for (const [name, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) continue;
+
+    if (isRecord(value)) {
+      const percent = parsePercent(
+        getAny(value, ["percent", "usage", "usedPercent", "used_pct", "pct", "use", "usagePercent", "usedPercentage"]),
+      );
+      const used = getAny(value, ["usedHuman", "used", "usedBytes"]);
+      const total = getAny(value, ["totalHuman", "total", "size", "capacity"]);
+
+      let details = "No details";
+      if (used != null && total != null) details = `${String(used)} / ${String(total)}`;
+      else if (used != null) details = `Used ${String(used)}`;
+      else if (total != null) details = `Total ${String(total)}`;
+
+      entries.push({ name, percent, details });
+      continue;
+    }
+
+    const percent = parsePercent(value);
+    entries.push({
+      name,
+      percent,
+      details: value == null ? "No details" : String(value),
+    });
+  }
+
+  const preferred = ["data", "memory", "state", "skills", "/", "root"];
+
+  return entries
+    .sort((a, b) => {
+      const ai = preferred.findIndex((p) => a.name.toLowerCase().includes(p));
+      const bi = preferred.findIndex((p) => b.name.toLowerCase().includes(p));
+      const av = ai === -1 ? 999 : ai;
+      const bv = bi === -1 ? 999 : bi;
+      return av - bv;
+    })
+    .slice(0, 8);
+}
+
 export default function SystemPage() {
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
 
@@ -111,7 +242,39 @@ export default function SystemPage() {
   const recentEpisodes: EpisodeLike[] = memoryQuery?.data?.recentEpisodes ?? [];
 
   const processCount = Array.isArray(health.processes) ? health.processes.length : 0;
-  const redisIndicator = toneBadge((health.current as any)?.redis ?? (health.system as any)?.redisStatus ?? "healthy");
+  const runningProcessCount = useMemo(
+    () => (health.processes ?? []).filter((p) => processDotClass(p.status) === "bg-emerald-400").length,
+    [health.processes],
+  );
+
+  const current = isRecord(health.current) ? health.current : {};
+  const redisData = isRecord(current.redis) ? current.redis : {};
+  const diskData = current.disk;
+
+  const redisIndicator = toneBadge(
+    getAny(redisData, ["status", "health", "state"]) ?? (health.current as any)?.redis ?? (health.system as any)?.redisStatus ?? "healthy",
+  );
+
+  const redisMemoryPercent = parsePercent(
+    getAny(redisData, [
+      "memoryUsagePercent",
+      "memoryPercent",
+      "usedMemoryPercent",
+      "used_memory_pct",
+      "memory_usage_percent",
+      "memory",
+    ]),
+  );
+
+  const redisClients =
+    parseCount(getAny(redisData, ["connectedClients", "clients", "connected_clients", "clientCount"])) ??
+    parseCount((health.system as any)?.redisClients);
+
+  const redisUptime =
+    getAny(redisData, ["uptime", "uptimeHuman", "uptimeInSeconds", "uptimeSeconds"]) ??
+    (health.system as any)?.redisUptime;
+
+  const diskEntries = useMemo(() => getDiskEntries(diskData), [diskData]);
 
   const streamLengths = useMemo(() => {
     const system = health.system ?? {};
@@ -120,6 +283,15 @@ export default function SystemPage() {
     );
     return pairs.slice(0, 6);
   }, [health.system]);
+
+  const cpuPercent = parsePercent((health.system as any)?.cpu);
+  const memoryPercent = parsePercent((health.system as any)?.memory);
+  const diskPercent =
+    parsePercent((health.system as any)?.disk) ??
+    parsePercent((health.system as any)?.diskUsage) ??
+    parsePercent((health.system as any)?.diskPercent) ??
+    diskEntries.find((entry) => entry.name === "/")?.percent ??
+    null;
 
   const filteredDomains = useMemo(() => {
     const q = knowledgeQuery.trim().toLowerCase();
@@ -139,109 +311,212 @@ export default function SystemPage() {
         <p className="text-sm text-muted-foreground">Health, schedule, and knowledge in one place.</p>
       </section>
 
-      <Tabs defaultValue="status" className="space-y-4">
+      <Tabs defaultValue="infrastructure" className="space-y-4">
         <TabsList className="grid h-auto grid-cols-1 gap-1 sm:grid-cols-3">
-          <TabsTrigger value="status">Status</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+          <TabsTrigger value="infrastructure">Infrastructure</TabsTrigger>
+          <TabsTrigger value="schedule">Scheduled Jobs</TabsTrigger>
+          <TabsTrigger value="memory">Memory</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="status" className="space-y-4">
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <TabsContent value="infrastructure" className="space-y-4">
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs uppercase tracking-wide">Redis connection</CardDescription>
-                <CardTitle className="flex items-center justify-between text-lg">
-                  <span className="inline-flex items-center gap-2">
-                    <Network className="size-4 text-muted-foreground" />
-                    Redis
-                  </span>
-                  {redisIndicator}
+                <CardDescription className="text-xs uppercase tracking-wide">System uptime</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Timer className="size-4 text-muted-foreground" />
+                  {String((health.system as any)?.uptime ?? "Unknown")}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">Live coordination and stream data.</CardContent>
+              <CardContent className="text-xs text-muted-foreground">Runtime since last restart.</CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription className="text-xs uppercase tracking-wide">Process uptime</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Timer className="size-4 text-muted-foreground" />
-                  {processCount} active
+                <CardDescription className="text-xs uppercase tracking-wide">CPU usage</CardDescription>
+                <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                  <span className="inline-flex items-center gap-2">
+                    <Server className="size-4 text-muted-foreground" />
+                    CPU
+                  </span>
+                  <span className="text-base font-medium">{formatPercentLabel(cpuPercent)}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">Running services currently tracked.</CardContent>
+              <CardContent className="space-y-2">
+                <Progress value={cpuPercent ?? 0} className="h-2" />
+                <p className="text-xs text-muted-foreground">Live compute load.</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs uppercase tracking-wide">Memory usage</CardDescription>
+                <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                  <span className="inline-flex items-center gap-2">
+                    <Database className="size-4 text-muted-foreground" />
+                    RAM
+                  </span>
+                  <span className="text-base font-medium">{formatPercentLabel(memoryPercent)}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Progress value={memoryPercent ?? 0} className="h-2" />
+                <p className="text-xs text-muted-foreground">System memory pressure.</p>
+              </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs uppercase tracking-wide">Disk usage</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <HardDrive className="size-4 text-muted-foreground" />
-                  {memoryStats?.dbSize ?? (health.system as any)?.dbSize ?? "Unknown"}
+                <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                  <span className="inline-flex items-center gap-2">
+                    <HardDrive className="size-4 text-muted-foreground" />
+                    Storage
+                  </span>
+                  <span className="text-base font-medium">{formatPercentLabel(diskPercent)}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">Database and data footprint.</CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs uppercase tracking-wide">Stream lengths</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Server className="size-4 text-muted-foreground" />
-                  {streamLengths.length}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">Queues and streams being monitored.</CardContent>
+              <CardContent className="space-y-2">
+                <Progress value={diskPercent ?? 0} className="h-2" />
+                <p className="text-xs text-muted-foreground">Overall disk occupancy.</p>
+              </CardContent>
             </Card>
           </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Status details</CardTitle>
-              <CardDescription>Current snapshot and recent process info.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {processCount === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Coffee className="size-4" />
-                  No process details available right now.
-                </div>
-              ) : (
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <Card className="xl:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Network className="size-4" />
+                    Redis
+                  </span>
+                  {redisIndicator}
+                </CardTitle>
+                <CardDescription>Connection state and cache usage.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  {health.processes?.slice(0, 12).map((processInfo, idx) => (
-                    <div key={idx} className="rounded-md border p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium text-sm">{String(processInfo.name ?? processInfo.actor ?? `Process ${idx + 1}`)}</p>
-                        {statusPill(String(processInfo.status ?? "ok"))}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {processInfo.uptime ? `Uptime ${String(processInfo.uptime)}` : "Uptime not reported"}
-                      </p>
-                    </div>
-                  ))}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Memory usage</span>
+                    <span>{formatPercentLabel(redisMemoryPercent)}</span>
+                  </div>
+                  <Progress value={redisMemoryPercent ?? 0} className="h-2" />
                 </div>
-              )}
 
-              {streamLengths.length > 0 ? (
-                <>
-                  <Separator />
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {streamLengths.map(([key, value]) => (
-                      <div key={key} className="rounded-md border p-3 text-sm">
-                        <p className="text-xs text-muted-foreground">{key}</p>
-                        <p className="font-medium mt-1">{String(value)}</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Connected clients</p>
+                    <p className="mt-1 font-medium">{redisClients ?? "N/A"}</p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Uptime</p>
+                    <p className="mt-1 font-medium">{formatUptime(redisUptime)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="xl:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <HardDrive className="size-4" />
+                  Disk
+                </CardTitle>
+                <CardDescription>Usage by key directories.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {diskEntries.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Coffee className="size-4" />
+                    No disk directory details available.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {diskEntries.map((entry) => (
+                      <div key={entry.name} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium text-foreground">{entry.name}</span>
+                          <span className="text-muted-foreground">{entry.percent != null ? `${Math.round(entry.percent)}%` : entry.details}</span>
+                        </div>
+                        <Progress value={entry.percent ?? 0} className="h-2" />
+                        <p className="text-[11px] text-muted-foreground line-clamp-1">{entry.details}</p>
                       </div>
                     ))}
                   </div>
-                </>
-              ) : null}
+                )}
+              </CardContent>
+            </Card>
 
-              <p className="text-xs text-muted-foreground">
-                Last update: {health.lastPublished ? formatRelative(new Date(health.lastPublished).getTime()) : "unknown"}
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="xl:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <Server className="size-4" />
+                    Processes
+                  </span>
+                  <Badge variant="secondary">{runningProcessCount}/{processCount} running</Badge>
+                </CardTitle>
+                <CardDescription>Service status, uptime, and PID.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {processCount === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Coffee className="size-4" />
+                    No process details available right now.
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[280px] pr-2">
+                    <div className="space-y-2">
+                      {health.processes?.slice(0, 20).map((processInfo, idx) => (
+                        <div key={idx} className="rounded-md border p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">
+                                {String(processInfo.name ?? processInfo.actor ?? `Process ${idx + 1}`)}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">PID {String(processInfo.pid ?? "—")}</p>
+                            </div>
+                            <span
+                              className={cn("mt-1 inline-block size-2 shrink-0 rounded-full", processDotClass(processInfo.status))}
+                              title={String(processInfo.status ?? "unknown")}
+                            />
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              Uptime {formatUptime(processInfo.uptime)}
+                            </p>
+                            {statusPill(String(processInfo.status ?? "unknown"))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
+          {streamLengths.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Queues & streams</CardTitle>
+                <CardDescription>Current stream/queue lengths from system metrics.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                {streamLengths.map(([key, value]) => (
+                  <div key={key} className="rounded-md border p-3 text-sm">
+                    <p className="text-xs text-muted-foreground">{key}</p>
+                    <p className="font-medium mt-1">{String(value)}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Last update: {health.lastPublished ? formatRelative(new Date(health.lastPublished).getTime()) : "unknown"}
+          </p>
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">
@@ -249,7 +524,7 @@ export default function SystemPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <CalendarClock className="size-4" />
-                Schedule
+                Scheduled Jobs
               </CardTitle>
               <CardDescription>Planned automations and when they last ran.</CardDescription>
             </CardHeader>
@@ -296,12 +571,12 @@ export default function SystemPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="knowledge" className="space-y-4">
+        <TabsContent value="memory" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Database className="size-4" />
-                Knowledge
+                Memory
               </CardTitle>
               <CardDescription>Browse saved domains and recent entries.</CardDescription>
             </CardHeader>
@@ -311,7 +586,7 @@ export default function SystemPage() {
                 <input
                   value={knowledgeQuery}
                   onChange={(event) => setKnowledgeQuery(event.target.value)}
-                  placeholder="Search knowledge domains"
+                  placeholder="Search memory domains"
                   className="w-full rounded-md border bg-background px-9 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
@@ -320,7 +595,7 @@ export default function SystemPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Domains</CardTitle>
-                    <CardDescription>How knowledge is organized.</CardDescription>
+                    <CardDescription>How memory is organized.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {filteredDomains.length === 0 ? (
@@ -348,11 +623,11 @@ export default function SystemPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Recent entries</CardTitle>
-                    <CardDescription>Newest saved knowledge snippets.</CardDescription>
+                    <CardDescription>Newest saved memory snippets.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {recentEpisodes.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No recent knowledge entries.</div>
+                      <div className="text-sm text-muted-foreground">No recent memory entries.</div>
                     ) : (
                       <ScrollArea className="h-[300px] pr-2">
                         <div className="space-y-2">
@@ -393,11 +668,12 @@ export default function SystemPage() {
 
           <p className="text-xs text-muted-foreground inline-flex items-center gap-2">
             <CheckCircle2 className="size-3" />
-            Clear labels are used: Schedule and Knowledge, not technical terms.
+            Memory and schedule views keep the same data behavior with richer infrastructure visuals.
           </p>
         </TabsContent>
       </Tabs>
 
+      <Separator />
       <p className="text-xs text-muted-foreground inline-flex items-center gap-2">
         <ShieldAlert className="size-3" />
         Data refreshes from the unified API routes.

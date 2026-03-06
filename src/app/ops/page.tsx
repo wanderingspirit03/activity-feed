@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
 	CheckCircle2,
 	Clock,
+	ClipboardList,
 	Loader2,
+	Plus,
 	Rocket,
 	Sparkles,
 	Wrench,
@@ -18,6 +21,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import OpActions from "@/components/ops/OpActions";
+import NewOpDialog from "@/components/ops/NewOpDialog";
 import { cn } from "@/lib/utils";
 
 /* ── Status helpers ────────────────────────────── */
@@ -145,7 +150,9 @@ function OpCard({ op }: { op: OpsData }) {
 			<CardHeader className="pb-4 px-3 sm:px-6">
 				<div className="flex items-start justify-between gap-2">
 					<div className="min-w-0 flex-1">
-						<CardTitle className="text-base sm:text-lg leading-snug break-words">{op.title}</CardTitle>
+						<Link href={`/ops/${op.opId}`} className="hover:underline">
+							<CardTitle className="text-base sm:text-lg leading-snug break-words">{op.title}</CardTitle>
+						</Link>
 						<CardDescription className="mt-1 font-mono text-[11px] sm:text-xs truncate">{op.opId}</CardDescription>
 					</div>
 					<Badge variant="outline" className={cn("shrink-0 uppercase tracking-wider text-[10px]", config.className)}>
@@ -168,6 +175,11 @@ function OpCard({ op }: { op: OpsData }) {
 					<Progress value={progress} className="h-1.5 sm:h-2" />
 				</div>
 			</CardHeader>
+
+			{/* Action buttons */}
+			<div className="px-3 sm:px-6 pb-2">
+				<OpActions opId={op.opId} status={op.status} />
+			</div>
 
 			<CardContent className="space-y-1.5 pt-0 px-3 sm:px-6">
 				{op.features.length === 0 ? (
@@ -220,6 +232,7 @@ function Timeline({ events }: { events: OpsEvent[] }) {
 export default function OpsPage() {
 	const ops = useOpsStore((state: { ops: OpsData[] }) => state.ops);
 	const latestOp = ops[0];
+	const [showNewOp, setShowNewOp] = useState(false);
 
 	return (
 		<div className="space-y-4 sm:space-y-6 px-3 py-4 sm:px-4 md:px-8 sm:py-6 pb-24 md:pb-6">
@@ -227,14 +240,24 @@ export default function OpsPage() {
 				<div className="flex items-center gap-2 sm:gap-3">
 					<Wrench className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
 					<h1 className="text-lg sm:text-xl font-semibold tracking-tight">Operations</h1>
-					{latestOp && (
-						<Badge variant="outline" className={cn("ml-auto text-[10px] sm:text-xs", (statusConfig[latestOp.status] ?? statusConfig.planning).className)}>
-							{latestOp.status}
-						</Badge>
-					)}
+					<div className="ml-auto flex items-center gap-2">
+						<Link href="/ops/history" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+							<ClipboardList className="h-3.5 w-3.5" />
+							<span className="hidden sm:inline">History</span>
+						</Link>
+						<button
+							type="button"
+							onClick={() => setShowNewOp(true)}
+							className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+						>
+							<Plus className="h-3.5 w-3.5" />
+							<span className="hidden sm:inline">New Op</span>
+						</button>
+					</div>
 				</div>
 				<p className="mt-1 text-xs sm:text-sm text-muted-foreground">Live progress of autonomous code operations</p>
 			</header>
+			<NewOpDialog open={showNewOp} onClose={() => setShowNewOp(false)} />
 
 			{ops.length === 0 ? (
 				<Card>

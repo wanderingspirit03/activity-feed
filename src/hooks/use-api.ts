@@ -32,6 +32,10 @@ export function useOps(opts?: SWRConfiguration<any, Error>) {
 	return useApi<any>("/api/ops", 10_000, opts);
 }
 
+export function useOp(opId: string, opts?: SWRConfiguration<any, Error>) {
+	return useApi<any>(`/api/ops/${opId}`, 15_000, opts);
+}
+
 export function useScores(opts?: SWRConfiguration<any, Error>) {
 	return useApi<any>("/api/scores", 30_000, opts);
 }

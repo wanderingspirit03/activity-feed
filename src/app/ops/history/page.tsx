@@ -7,6 +7,7 @@ import { useOps } from "@/hooks/use-api";
 import { formatDuration, formatTimestamp } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OpAnalytics } from "@/components/ops/OpAnalytics";
 
 type OpFeature = {
 	status?: string;
@@ -65,13 +66,15 @@ export default function OpsHistoryPage() {
 	}, [data?.ops]);
 
 	return (
-		<main className="mx-auto max-w-6xl space-y-6">
+		<main className="mx-auto max-w-6xl space-y-6 px-3 py-4 sm:px-4 md:px-8 sm:py-6 pb-24 md:pb-6">
 			<section className="space-y-1">
 				<h1 className="text-2xl font-semibold md:text-3xl">Operation History</h1>
 				<p className="text-sm text-muted-foreground">
 					Recent operations with status, progress, and timing.
 				</p>
 			</section>
+
+			<OpAnalytics ops={ops as any} />
 
 			{isLoading ? (
 				<div className="grid grid-cols-1 gap-4">
