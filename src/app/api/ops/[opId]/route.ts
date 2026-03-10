@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { errorJson } from "@/lib/api-error";
 import { getRedis } from "@/lib/redis";
 import type { OpsData } from "@/stores/ops-store";
 
@@ -77,9 +78,6 @@ export async function GET(
 
 		return NextResponse.json({ op });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: "Failed to load op data", detail: String(error) },
-			{ status: 500 },
-		);
+		return errorJson("Failed to load op data", error);
 	}
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { errorJson } from "@/lib/api-error";
 import { getRedis } from "@/lib/redis";
 import type { OpsData } from "@/stores/ops-store";
 
@@ -83,10 +84,7 @@ export async function GET() {
 
 		return NextResponse.json({ ops });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: "Failed to load ops data", detail: String(error) },
-			{ status: 500 },
-		);
+		return errorJson("Failed to load ops data", error);
 	}
 }
 
@@ -111,9 +109,6 @@ export async function POST(request: Request) {
 
 		return NextResponse.json({ ok: true, action: "create" });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : "Failed to publish command" },
-			{ status: 500 },
-		);
+		return errorJson("Failed to publish ops command", error);
 	}
 }

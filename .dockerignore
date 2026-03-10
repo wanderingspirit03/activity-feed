@@ -1,3 +1,16 @@
 node_modules
 .next
 .git
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map
+server.js
+server.js.map
+server.d.ts
+server.d.ts.map
+next.config.js
+next.config.js.map
+next.config.d.ts
+next.config.d.ts.map
+tsconfig.tsbuildinfo

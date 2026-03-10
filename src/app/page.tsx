@@ -100,6 +100,11 @@ export default function HomePage() {
   const scoreTotals = scoresQuery?.data?.totals;
   const health = healthQuery?.data;
   const hasErrors = Boolean(runsQuery?.error || scoresQuery?.error || healthQuery?.error);
+  const errorSources = [
+    runsQuery?.error ? "tasks" : null,
+    scoresQuery?.error ? "scores" : null,
+    healthQuery?.error ? "health" : null,
+  ].filter(Boolean) as string[];
 
   const liveRunsRaw = useLiveStore((s: any) => s.runs);
 
@@ -134,7 +139,7 @@ export default function HomePage() {
   }).length;
 
   const successRate = useMemo(() => {
-    if (scoreEntries.length === 0) return 0;
+    if (scoreEntries.length === 0) return null;
     const successCount = scoreEntries.filter((entry: any) => {
       const status = String(entry?.status ?? "").toLowerCase();
       return status.includes("ok") || status.includes("success") || status.includes("complete");
@@ -153,9 +158,8 @@ export default function HomePage() {
 
   const healthSignal = useMemo(() => {
     const current = health?.current;
-    if (!current) return { label: "Unknown", tone: "neutral" as const };
+    if (!current) return { label: "Checking...", tone: "neutral" as const };
 
-    // Check specific structured fields first
     const metrics = current?.metrics ?? current;
     const redisStatus = metrics?.redis?.status ?? metrics?.redisStatus ?? "";
     const overallStatus = metrics?.status ?? current?.status ?? "";
@@ -200,13 +204,12 @@ export default function HomePage() {
       </section>
 
       {hasErrors && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-center gap-2">
-          <AlertTriangle className="size-4 text-red-400 shrink-0" />
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-amber-300 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-red-300">Some data couldn't be loaded</p>
-            <p className="text-xs text-red-200/70">
-              {runsQuery?.error ? "Tasks " : ""}{scoresQuery?.error ? "Scores " : ""}{healthQuery?.error ? "Health " : ""}
-              — showing last available data.
+            <p className="text-sm font-medium text-amber-100">A few panels are still catching up</p>
+            <p className="text-xs text-amber-100/75">
+              {errorSources.length > 0 ? `${errorSources.join(", ")} may refresh shortly.` : "Refreshing data…"} Showing the latest data we have in the meantime.
             </p>
           </div>
         </div>
@@ -223,16 +226,16 @@ export default function HomePage() {
 
         {metricCard({
           title: "Success Rate",
-          value: isLoading ? "…" : `${successRate}%`,
-          subtitle: isLoading ? "Reading score history" : `${scoreEntries.length} tasks scored`,
+          value: isLoading ? "…" : successRate === null ? "—" : `${successRate}%`,
+          subtitle: isLoading ? "Reading score history" : scoreEntries.length === 0 ? "No scored tasks yet" : `${scoreEntries.length} tasks scored`,
           icon: <CheckCircle2 className="size-4" />,
-          tone: successRate >= 80 ? "good" : successRate >= 60 ? "warn" : "bad",
+          tone: successRate === null ? "neutral" : successRate >= 80 ? "good" : successRate >= 60 ? "warn" : "bad",
         })}
 
         {metricCard({
           title: "Avg Duration",
           value: isLoading ? "…" : avgDurationMs > 0 ? formatDuration(avgDurationMs) : "—",
-          subtitle: isLoading ? "Calculating timing" : "Based on scored tasks",
+          subtitle: isLoading ? "Calculating timing" : avgDurationMs > 0 ? "Based on scored tasks" : "No timing data yet",
           icon: <Timer className="size-4" />,
           tone: "neutral",
         })}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { errorJson } from "@/lib/api-error";
 import { getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
@@ -35,9 +36,6 @@ export async function POST(
 
 		return NextResponse.json({ ok: true, action });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : "Failed to publish command" },
-			{ status: 500 },
-		);
+		return errorJson("Failed to publish op action", error);
 	}
 }

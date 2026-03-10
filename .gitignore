@@ -1,3 +1,13 @@
 node_modules/
 .next/
 .env
+
+# Compiled output (TypeScript)
+*.d.ts
+*.d.ts.map
+*.js.map
+!next.config.js
+src/**/*.js
+server.js
+server.d.ts
+tsconfig.tsbuildinfo
