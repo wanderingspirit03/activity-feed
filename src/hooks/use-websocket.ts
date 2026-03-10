@@ -12,6 +12,7 @@ export function useWebsocket() {
 	const isConnected = useLiveStore((state) => state.isConnected);
 	const addEvent = useLiveStore((state) => state.addEvent);
 	const setConnected = useLiveStore((state) => state.setConnected);
+	const lastEventAt = useLiveStore((state) => state.lastEventAt);
 
 	const socketRef = useRef<WebSocket | null>(null);
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,7 +35,8 @@ export function useWebsocket() {
 		}
 
 		clearReconnectTimer();
-		const ws = new WebSocket(`wss://${window.location.host}/ws`);
+		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+		const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 		socketRef.current = ws;
 
 		ws.onopen = () => {
@@ -91,5 +93,5 @@ export function useWebsocket() {
 		};
 	}, [connect, setConnected]);
 
-	return { isConnected, reconnect };
+	return { isConnected, lastEventAt, reconnect };
 }

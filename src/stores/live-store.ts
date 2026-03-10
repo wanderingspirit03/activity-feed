@@ -5,6 +5,7 @@ import { create } from "zustand";
 export type ActivityItem = {
 	id: string;
 	type: string;
+	eventKind: "tool" | "llm" | "subagent" | "run" | "human" | "error" | "unknown";
 	title: string;
 	toolName?: string;
 	toolArgs?: string;
@@ -66,6 +67,18 @@ type LiveStore = {
 	clearRuns: () => void;
 };
 
+function inferEventKind(item: RawActivity): ActivityItem["eventKind"] {
+	const type = (item.type ?? "").toLowerCase();
+	if (type.includes("tool.error") || type.includes("error")) return "error";
+	if (type.includes("tool")) return "tool";
+	if (type.includes("llm")) return "llm";
+	if (type.includes("subagent")) return "subagent";
+	if (type.includes("run")) return "run";
+	if (type.includes("human")) return "human";
+	if (item.toolName) return "tool";
+	return "unknown";
+}
+
 function normalizeActivity(item: RawActivity): ActivityItem {
 	const startedAt = item.startedAt ?? item.timestamp ?? Date.now();
 	const inferredStatus: ActivityItem["status"] =
@@ -78,6 +91,7 @@ function normalizeActivity(item: RawActivity): ActivityItem {
 	return {
 		id: item.id ?? `${item.toolName ?? "event"}-${startedAt}`,
 		type: item.type ?? "activity",
+		eventKind: inferEventKind(item),
 		title: item.title ?? item.description ?? item.toolName ?? "Activity",
 		toolName: item.toolName,
 		toolArgs: item.toolArgs,

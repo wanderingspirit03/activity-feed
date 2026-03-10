@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import {
+  AlertTriangle,
   BarChart3,
   ChevronDown,
   ClipboardCheck,
@@ -19,6 +20,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 
@@ -66,8 +68,20 @@ export default function QualityPage() {
   const entries: ScoreEntryLike[] = scoresQuery?.data?.entries ?? [];
   const dailyRaw: DailyLike[] = scoresQuery?.data?.daily ?? [];
   const totals = scoresQuery?.data?.totals;
+  const hasError = Boolean(scoresQuery?.error);
 
-  const last14Days = useMemo(() => dailyRaw.slice(-14), [dailyRaw]);
+  const last14Days = useMemo(() => {
+    const today = new Date();
+    const days: DailyLike[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const existing = dailyRaw.find((day) => day.date === dateStr);
+      days.push(existing ?? { date: dateStr, count: 0, avgQuality: 0, avgEfficiency: 0 });
+    }
+    return days;
+  }, [dailyRaw]);
 
   const summary = useMemo(() => {
     const avgQuality = Number(totals?.avgQuality ?? 0);
@@ -93,6 +107,15 @@ export default function QualityPage() {
         <h1 className="text-2xl md:text-3xl font-semibold">Quality</h1>
         <p className="text-sm text-muted-foreground">Understand score trends and improve task outcomes.</p>
       </section>
+
+      {hasError && (
+        <Card className="border-red-500/30 bg-red-500/10">
+          <CardContent className="py-3 flex items-center gap-2">
+            <AlertTriangle className="size-4 text-red-400" />
+            <p className="text-sm text-red-300">Some quality data couldn't be loaded.</p>
+          </CardContent>
+        </Card>
+      )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Card>
@@ -140,32 +163,38 @@ export default function QualityPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {last14Days.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Coffee className="size-4" />
-              No trend data yet.
-            </div>
-          ) : (
+          <TooltipProvider>
             <div className="grid grid-cols-7 gap-2 sm:grid-cols-14 items-end h-52">
               {last14Days.map((day) => {
                 const value = Number(day.avgQuality ?? 0);
                 const height = Math.max(8, Math.min(100, value * 10));
 
                 return (
-                  <div key={day.date} className="flex flex-col items-center gap-1">
-                    <div className="h-44 w-full rounded-md border border-border/60 bg-muted/20 p-1 flex items-end">
-                      <div
-                        className={cn("w-full rounded-sm transition-all", trendBarColor(value))}
-                        style={{ height: `${height}%` }}
-                        title={`${day.date}: ${value.toFixed(1)}`}
-                      />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{day.date.slice(5)}</span>
-                  </div>
+                  <Tooltip key={day.date}>
+                    <TooltipTrigger asChild>
+                      <div className="flex flex-col items-center gap-1 cursor-pointer">
+                        <div className="h-44 w-full rounded-md border border-border/60 bg-muted/20 p-1 flex items-end">
+                          <div
+                            className={cn("w-full rounded-sm transition-all", trendBarColor(value))}
+                            style={{ height: `${height}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{day.date.slice(5)}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="text-xs space-y-1">
+                        <p className="font-medium">{day.date}</p>
+                        <p>Quality: {value.toFixed(1)}/10</p>
+                        <p>Efficiency: {Number(day.avgEfficiency ?? 0).toFixed(1)}/10</p>
+                        <p>{day.count} task{day.count !== 1 ? "s" : ""}</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
                 );
               })}
             </div>
-          )}
+          </TooltipProvider>
         </CardContent>
       </Card>
 

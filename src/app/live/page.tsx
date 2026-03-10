@@ -1,7 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Activity, Clock3, Wifi, WifiOff, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	Activity,
+	AlertTriangle,
+	Brain,
+	Clock3,
+	MessageCircle,
+	Play,
+	Users,
+	Wifi,
+	WifiOff,
+	Wrench,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLiveStore, type RunData, type ActivityItem } from "@/stores/live-store";
@@ -24,6 +35,26 @@ function elapsed(startedAt: number) {
 	return formatDuration(Date.now() - startedAt);
 }
 
+const activeStatuses = new Set(["working", "running", "queued", "understanding", "reviewing"]);
+
+function EventIcon({ kind, className }: { kind: string; className?: string }) {
+	switch (kind) {
+		case "llm":
+			return <Brain className={className} />;
+		case "subagent":
+			return <Users className={className} />;
+		case "run":
+			return <Play className={className} />;
+		case "human":
+			return <MessageCircle className={className} />;
+		case "error":
+			return <AlertTriangle className={className} />;
+		case "tool":
+		default:
+			return <Wrench className={className} />;
+	}
+}
+
 function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean }) {
 	const [expanded, setExpanded] = useState(false);
 	const isRunning = item.status === "running";
@@ -42,11 +73,11 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 			}`}
 		>
 			<div className="flex items-center gap-2 min-w-0">
-				<Wrench className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
+				<EventIcon kind={item.eventKind} className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
 				<span className="font-mono text-sm text-neutral-300 shrink-0">
-					{item.toolName || "tool"}
+					{item.title || item.toolName || "tool"}
 				</span>
-				{!expanded && item.toolArgs && (
+				{!expanded && item.toolArgs && item.toolArgs !== item.title && (
 					<span className="text-xs text-neutral-500 truncate min-w-0">
 						{item.toolArgs.slice(0, 80)}
 					</span>
@@ -88,7 +119,7 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 
 function RunSection({ run }: { run: RunData }) {
 	const tools = run.tools || [];
-	const isActive = run.status === "working" || run.status === "running";
+	const isActive = activeStatuses.has(run.status);
 
 	return (
 		<Card className="border-neutral-800 bg-neutral-950">
@@ -118,11 +149,11 @@ function RunSection({ run }: { run: RunData }) {
 				{tools.length === 0 ? (
 					<p className="text-sm text-neutral-500 italic">Waiting for tool calls...</p>
 				) : (
-					tools.slice(-20).map((item, i) => (
+					tools.slice(-20).map((item, i, sliced) => (
 						<ToolCard
 							key={item.id || `${run.runId}-${i}`}
 							item={item}
-							isLatest={i === tools.length - 1 && isActive}
+							isLatest={i === sliced.length - 1 && isActive}
 						/>
 					))
 				)}
@@ -134,6 +165,10 @@ function RunSection({ run }: { run: RunData }) {
 export default function LivePage() {
 	const runs = useLiveStore((s) => s.runs);
 	const isConnected = useLiveStore((s) => s.isConnected);
+	const [paused, setPaused] = useState(false);
+	const [bufferedCount, setBufferedCount] = useState(0);
+	const [displayRuns, setDisplayRuns] = useState(() => new Map(runs));
+	const lastRunsRef = useRef(runs);
 
 	// Force re-render every 5s for elapsed times
 	const [, setTick] = useState(0);
@@ -142,28 +177,64 @@ export default function LivePage() {
 		return () => clearInterval(iv);
 	}, []);
 
+	useEffect(() => {
+		if (paused) {
+			if (lastRunsRef.current !== runs) {
+				setBufferedCount((count) => count + 1);
+				lastRunsRef.current = runs;
+			}
+			return;
+		}
+
+		setDisplayRuns(new Map(runs));
+		setBufferedCount(0);
+		lastRunsRef.current = runs;
+	}, [paused, runs]);
+
 	const runArray = useMemo(() => {
-		const arr = Array.from(runs.values());
+		const arr = Array.from(displayRuns.values());
 		arr.sort((a, b) => b.startedAt - a.startedAt);
 		return arr;
-	}, [runs]);
+	}, [displayRuns]);
 
-	const activeRuns = runArray.filter(
-		(r) => r.status === "working" || r.status === "running"
-	);
-	const recentRuns = runArray.filter(
-		(r) => r.status !== "working" && r.status !== "running"
-	);
+	const activeRuns = runArray.filter((r) => activeStatuses.has(r.status));
+	const recentRuns = runArray.filter((r) => !activeStatuses.has(r.status));
+	const activePhaseCounts = useMemo(() => {
+		const counts = new Map<string, number>();
+		for (const run of runArray) {
+			const phase = (run.currentPhase || run.status || "unknown").toLowerCase();
+			if (!activeStatuses.has(phase)) continue;
+			counts.set(phase, (counts.get(phase) ?? 0) + 1);
+		}
+		return Array.from(counts.entries());
+	}, [runArray]);
+	const activePhaseCount = activePhaseCounts.reduce((sum, [, count]) => sum + count, 0);
 
 	return (
 		<div className="space-y-6 px-4 md:px-8 py-6 max-w-4xl">
 			{/* Header */}
-			<div className="flex items-center justify-between">
+			<div className="flex items-center justify-between gap-4">
 				<div>
 					<h1 className="text-2xl md:text-3xl font-bold">Live</h1>
 					<p className="text-sm text-neutral-500 mt-1">
 						Real-time assistant activity stream.
 					</p>
+					<div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+						<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1">
+							{activeRuns.length} active runs
+						</span>
+						<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1">
+							{activePhaseCount} active phases
+						</span>
+						{activePhaseCounts.map(([phase, count]) => (
+							<span
+								key={phase}
+								className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1 capitalize"
+							>
+								{phase}: {count}
+							</span>
+						))}
+					</div>
 				</div>
 				<div className="flex items-center gap-2">
 					{isConnected ? (
@@ -177,6 +248,19 @@ export default function LivePage() {
 							<span className="text-xs text-red-400">Disconnected</span>
 						</>
 					)}
+					<button
+						onClick={() => {
+							setPaused(!paused);
+							if (paused) setBufferedCount(0);
+						}}
+						className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+							paused
+								? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+								: "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+						}`}
+					>
+						{paused ? `▶ Resume (${bufferedCount} new)` : "⏸ Pause"}
+					</button>
 				</div>
 			</div>
 

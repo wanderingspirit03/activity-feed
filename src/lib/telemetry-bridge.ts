@@ -91,6 +91,30 @@ export function translateEventToActivity(event: RawTelemetryEvent): ActivityItem
       } else if (event.tool === "run_subagent") {
         title = "Bringing in a specialist...";
         icon = "users";
+      } else if (event.tool === "grep") {
+        title = "Searching for a specific pattern...";
+        icon = "search";
+      } else if (event.tool === "find") {
+        title = "Looking for the right files...";
+        icon = "folder-search";
+      } else if (event.tool === "ls") {
+        title = "Browsing folder contents...";
+        icon = "folder";
+      } else if (event.tool === "memory_read_working" || event.tool === "memory_write_working") {
+        title = "Checking memory...";
+        icon = "brain";
+      } else if (event.tool === "memory_store_knowledge") {
+        title = "Remembering this for later...";
+        icon = "bookmark";
+      } else if (event.tool === "deep_research_railway") {
+        title = "Starting deep research...";
+        icon = "microscope";
+      } else if (event.tool === "computer_use") {
+        title = "Working on the computer...";
+        icon = "monitor";
+      } else if (event.tool === "web_extract") {
+        title = "Reading a web page...";
+        icon = "globe";
       } else {
         title = `Using an unexpected tool: ${event.tool}...`;
         icon = "tool";
@@ -152,6 +176,21 @@ export function translateEventToActivity(event: RawTelemetryEvent): ActivityItem
       break;
   }
 
+  // Force error-like handling for tool.error events without marking the whole run as failed.
+  if (event.type === "tool.error") {
+    return {
+      id: event.id,
+      runId: event.runId,
+      timestamp,
+      phase: "working",
+      title,
+      description,
+      icon,
+      progress: progressDelta,
+      isActive: false,
+    };
+  }
+
   return {
     id: event.id,
     runId: event.runId,
@@ -167,17 +206,48 @@ export function translateEventToActivity(event: RawTelemetryEvent): ActivityItem
 
 export function determineSpecialist(task: string): string {
   const lowercaseTask = task.toLowerCase();
-  if (lowercaseTask.includes("research") || lowercaseTask.includes("find")) {
+  if (lowercaseTask.includes("research") || lowercaseTask.includes("find") || lowercaseTask.includes("search")) {
     return "Researcher";
   }
-  if (lowercaseTask.includes("write") || lowercaseTask.includes("create") || lowercaseTask.includes("build")) {
+  if (
+    lowercaseTask.includes("write") ||
+    lowercaseTask.includes("create") ||
+    lowercaseTask.includes("build") ||
+    lowercaseTask.includes("implement")
+  ) {
     return "Builder";
   }
-  if (lowercaseTask.includes("fix") || lowercaseTask.includes("debug") || lowercaseTask.includes("error")) {
+  if (
+    lowercaseTask.includes("fix") ||
+    lowercaseTask.includes("debug") ||
+    lowercaseTask.includes("error") ||
+    lowercaseTask.includes("bug")
+  ) {
     return "Troubleshooter";
   }
-  if (lowercaseTask.includes("deploy") || lowercaseTask.includes("ship") || lowercaseTask.includes("launch")) {
+  if (
+    lowercaseTask.includes("deploy") ||
+    lowercaseTask.includes("ship") ||
+    lowercaseTask.includes("launch") ||
+    lowercaseTask.includes("release")
+  ) {
     return "Deployer";
+  }
+  if (
+    lowercaseTask.includes("review") ||
+    lowercaseTask.includes("check") ||
+    lowercaseTask.includes("verify") ||
+    lowercaseTask.includes("audit")
+  ) {
+    return "Reviewer";
+  }
+  if (
+    lowercaseTask.includes("analyze") ||
+    lowercaseTask.includes("report") ||
+    lowercaseTask.includes("data") ||
+    lowercaseTask.includes("analyse")
+  ) {
+    return "Analyst";
   }
   return "Assistant";
 }

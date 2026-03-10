@@ -1,21 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+	AlertTriangle,
 	CheckCircle2,
 	Clock,
 	ClipboardList,
 	Loader2,
 	Plus,
-	Rocket,
 	Sparkles,
 	Wrench,
 	XCircle,
-	AlertTriangle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+import { useOps } from "@/hooks/use-api";
 import { useOpsStore, type OpsData, type OpsFeature, type OpsEvent, type OpsFeatureStatus } from "@/stores/ops-store";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -41,6 +41,10 @@ const featureStatusConfig: Record<OpsFeatureStatus, { label: string; className: 
 	done: { label: "Done", className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", icon: CheckCircle2 },
 	failed: { label: "Failed", className: "text-red-400 border-red-500/40 bg-red-500/10", icon: XCircle },
 	"fix-needed": { label: "Needs update", className: "text-orange-400 border-orange-500/40 bg-orange-500/10", icon: AlertTriangle },
+};
+
+type OpsApiResponse = {
+	ops?: OpsData[];
 };
 
 function eventEmoji(type: string, status?: string) {
@@ -231,8 +235,21 @@ function Timeline({ events }: { events: OpsEvent[] }) {
 
 export default function OpsPage() {
 	const ops = useOpsStore((state: { ops: OpsData[] }) => state.ops);
-	const latestOp = ops[0];
+	const addOrUpdateOp = useOpsStore((state) => state.addOrUpdateOp);
+	const { data } = useOps() as { data?: OpsApiResponse };
 	const [showNewOp, setShowNewOp] = useState(false);
+
+	useEffect(() => {
+		for (const op of data?.ops ?? []) {
+			if (op?.opId) addOrUpdateOp(op);
+		}
+	}, [data?.ops, addOrUpdateOp]);
+
+	const activeOps = useMemo(
+		() => ops.filter((op) => !["completed", "failed"].includes(String(op.status ?? "").toLowerCase())),
+		[ops],
+	);
+	const latestOp = activeOps[0] ?? ops[0];
 
 	return (
 		<div className="space-y-4 sm:space-y-6 px-3 py-4 sm:px-4 md:px-8 sm:py-6 pb-24 md:pb-6">
@@ -259,7 +276,7 @@ export default function OpsPage() {
 			</header>
 			<NewOpDialog open={showNewOp} onClose={() => setShowNewOp(false)} />
 
-			{ops.length === 0 ? (
+			{activeOps.length === 0 ? (
 				<Card>
 					<CardContent className="flex flex-col items-center justify-center py-12 sm:py-16 text-center">
 						<div className="mb-3 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-dashed border-border">
@@ -274,7 +291,7 @@ export default function OpsPage() {
 			) : (
 				<div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
 					<section className="space-y-4 lg:col-span-2">
-						{ops.map((op: OpsData) => <OpCard key={op.opId} op={op} />)}
+						{activeOps.map((op: OpsData) => <OpCard key={op.opId} op={op} />)}
 					</section>
 					<aside className="lg:col-span-1">
 						{latestOp && <Timeline events={latestOp.events} />}

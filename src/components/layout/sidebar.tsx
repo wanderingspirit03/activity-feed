@@ -16,7 +16,7 @@ const NAV_ITEMS: NavItem[] = [
 	{ href: "/", label: "Home", icon: Home },
 	{ href: "/live", label: "Live", icon: Radio },
 	{ href: "/tasks", label: "Tasks", icon: ListTodo },
-	{ href: "/ops/history", label: "History", icon: ClipboardList },
+	{ href: "/ops/history", label: "Operations", icon: ClipboardList },
 	{ href: "/quality", label: "Quality", icon: BarChart3 },
 	{ href: "/system", label: "System", icon: Settings },
 ];

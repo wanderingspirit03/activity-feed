@@ -64,7 +64,17 @@ function normalizeStatus(run: RunLike): "running" | "completed" | "failed" | "st
   if (run.stuckFlag || status.includes("stuck") || status.includes("timeout")) return "stuck";
   if (run.hasDlq || run.hasHandlerErrors || status.includes("fail") || status.includes("error")) return "failed";
   if (status.includes("complete") || status.includes("done") || status.includes("ok") || status.includes("success")) return "completed";
-  return "running";
+  if (
+    status.includes("running") ||
+    status.includes("processing") ||
+    status.includes("active") ||
+    status.includes("waiting") ||
+    status.includes("retrying") ||
+    status.includes("idle")
+  ) {
+    return "running";
+  }
+  return "running"; // Default to running for unknown states (better than completed)
 }
 
 function statusBadge(status: ReturnType<typeof normalizeStatus>) {
@@ -85,6 +95,7 @@ export default function TasksPage() {
   const runs: RunLike[] = runsQuery?.data?.runs ?? [];
   const failedTasks: DlqLike[] = dlqQuery?.data?.entries ?? [];
   const assistants: ActorLike[] = actorsQuery?.data?.actors ?? [];
+  const hasError = Boolean(runsQuery?.error || dlqQuery?.error || actorsQuery?.error);
 
   const filteredRuns = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -168,6 +179,15 @@ export default function TasksPage() {
           </div>
         </CardContent>
       </Card>
+
+      {hasError && (
+        <Card className="border-red-500/30 bg-red-500/10">
+          <CardContent className="py-3 flex items-center gap-2">
+            <AlertTriangle className="size-4 text-red-400" />
+            <p className="text-sm text-red-300">Some task data couldn't be loaded.</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="all-tasks" className="space-y-4">
         <TabsList className="grid h-auto grid-cols-1 gap-1 sm:grid-cols-3">
@@ -290,7 +310,8 @@ export default function TasksPage() {
 
                           <button
                             type="button"
-                            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+                            disabled
+                            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground opacity-50 cursor-not-allowed"
                           >
                             <RefreshCcw className="size-3" />
                             Retry (coming soon)

@@ -14,7 +14,8 @@ type OpFeature = {
 };
 
 type OpItem = {
-	id: string;
+	id?: string;
+	opId?: string;
 	title?: string;
 	status?: string;
 	startedAt?: string | number | null;
@@ -54,7 +55,11 @@ function humanStatus(status?: string) {
 }
 
 export default function OpsHistoryPage() {
-	const { data, isLoading } = useOps() as { data?: OpsResponse; isLoading: boolean };
+	const { data, isLoading, error } = useOps() as {
+		data?: OpsResponse;
+		isLoading: boolean;
+		error?: Error;
+	};
 
 	const ops = useMemo(() => {
 		const list = data?.ops ?? [];
@@ -87,6 +92,12 @@ export default function OpsHistoryPage() {
 						</Card>
 					))}
 				</div>
+			) : error ? (
+				<Card className="bg-card border-red-500/30">
+					<CardContent className="py-6 text-center text-sm text-red-400">
+						Failed to load operations. Please try again later.
+					</CardContent>
+				</Card>
 			) : ops.length === 0 ? (
 				<Card className="bg-card">
 					<CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -109,14 +120,16 @@ export default function OpsHistoryPage() {
 							return value === "done" || value === "completed";
 						}).length;
 
+						const opKey = op.opId ?? op.id ?? "unknown-op";
+
 						return (
-							<Link key={op.id} href={`/ops/${op.id}`} className="block">
+							<Link key={opKey} href={`/ops/${op.opId ?? op.id}`} className="block">
 								<Card className="bg-card transition-colors hover:bg-muted/20">
 									<CardHeader className="space-y-3">
 										<div className="flex flex-wrap items-start justify-between gap-2">
 											<div className="min-w-0">
-												<CardTitle className="truncate text-lg">{op.title ?? op.id}</CardTitle>
-												<CardDescription className="mt-1 font-mono text-xs">{op.id}</CardDescription>
+												<CardTitle className="truncate text-lg">{op.title ?? op.opId ?? op.id}</CardTitle>
+												<CardDescription className="mt-1 font-mono text-xs">{op.opId ?? op.id}</CardDescription>
 											</div>
 											<Badge className={statusClass(status)}>{humanStatus(status)}</Badge>
 										</div>

@@ -41,6 +41,7 @@ type JobLike = {
   enabled?: boolean;
   lastRun?: {
     status?: string;
+    ok?: boolean | number | string;
     at?: string;
     timestamp?: string;
     durationMs?: number;
@@ -160,6 +161,11 @@ function processDotClass(status: unknown): string {
   return "bg-slate-400";
 }
 
+function getProcessStatus(processInfo: Record<string, unknown>): string {
+  const uptimeMs = processInfo.uptimeMs;
+  return String(processInfo.status ?? (uptimeMs && Number(uptimeMs) > 0 ? "running" : "unknown"));
+}
+
 function niceSchedule(job: JobLike) {
   if (job.every) return `Runs ${job.every}`;
   if (job.schedule) return `Schedule: ${job.schedule}`;
@@ -181,6 +187,15 @@ function statusPill(status?: string) {
     return <Badge className="bg-red-500/15 text-red-300 border-red-500/30">Issue</Badge>;
   }
   return <Badge variant="secondary">Unknown</Badge>;
+}
+
+function cronRunStatus(lastRun: any): string {
+  if (!lastRun) return "unknown";
+  if (lastRun.status) return String(lastRun.status);
+  if (typeof lastRun.ok === "boolean") return lastRun.ok ? "ok" : "error";
+  if (lastRun.ok === 1 || lastRun.ok === "1") return "ok";
+  if (lastRun.ok === 0 || lastRun.ok === "0") return "error";
+  return "unknown";
 }
 
 function getDiskEntries(raw: unknown): DiskEntry[] {
@@ -240,19 +255,26 @@ export default function SystemPage() {
   const memoryStats = memoryQuery?.data?.stats ?? null;
   const domains: MemoryDomainLike[] = memoryQuery?.data?.domains ?? [];
   const recentEpisodes: EpisodeLike[] = memoryQuery?.data?.recentEpisodes ?? [];
+  const hasError = Boolean(healthQuery?.error || cronQuery?.error || memoryQuery?.error);
 
   const processCount = Array.isArray(health.processes) ? health.processes.length : 0;
   const runningProcessCount = useMemo(
-    () => (health.processes ?? []).filter((p) => processDotClass(p.status) === "bg-emerald-400").length,
+    () => (health.processes ?? []).filter((p) => processDotClass(getProcessStatus(p)) === "bg-emerald-400").length,
     [health.processes],
   );
 
   const current = isRecord(health.current) ? health.current : {};
-  const redisData = isRecord(current.redis) ? current.redis : {};
-  const diskData = current.disk;
+  const currentMetrics = isRecord(current.metrics) ? current.metrics : current;
+  const redisData =
+    (isRecord(current.redis) ? current.redis : null) ??
+    (isRecord(currentMetrics.redis) ? currentMetrics.redis : {});
+  const diskData = current.disk ?? currentMetrics.disk;
 
   const redisIndicator = toneBadge(
-    getAny(redisData, ["status", "health", "state"]) ?? (health.current as any)?.redis ?? (health.system as any)?.redisStatus ?? "healthy",
+    getAny(redisData, ["status", "health", "state"]) ??
+      getAny(currentMetrics, ["redis", "redisStatus"]) ??
+      (health.system as any)?.redisStatus ??
+      "healthy",
   );
 
   const redisMemoryPercent = parsePercent(
@@ -284,12 +306,19 @@ export default function SystemPage() {
     return pairs.slice(0, 6);
   }, [health.system]);
 
-  const cpuPercent = parsePercent((health.system as any)?.cpu);
-  const memoryPercent = parsePercent((health.system as any)?.memory);
+  const cpuPercent = parsePercent(
+    getAny(health.system as any, ["cpu", "cpuUsage", "cpuPercent"]) ??
+      getAny(currentMetrics, ["cpu", "cpuUsage", "cpuPercent"]),
+  );
+  const memoryPercent = parsePercent(
+    getAny(health.system as any, ["memory", "memoryUsage", "memoryPercent", "memUsage"]) ??
+      getAny(currentMetrics, ["memory", "memoryUsage", "memoryPercent"]),
+  );
   const diskPercent =
     parsePercent((health.system as any)?.disk) ??
     parsePercent((health.system as any)?.diskUsage) ??
     parsePercent((health.system as any)?.diskPercent) ??
+    parsePercent(getAny(currentMetrics, ["disk", "diskUsage", "diskPercent"])) ??
     diskEntries.find((entry) => entry.name === "/")?.percent ??
     null;
 
@@ -311,6 +340,15 @@ export default function SystemPage() {
         <p className="text-sm text-muted-foreground">Health, schedule, and knowledge in one place.</p>
       </section>
 
+      {hasError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-center gap-2">
+          <ShieldAlert className="size-4 text-red-400" />
+          <p className="text-sm text-red-300">
+            Some system data couldn't be loaded. Showing last available data.
+          </p>
+        </div>
+      )}
+
       <Tabs defaultValue="infrastructure" className="space-y-4">
         <TabsList className="grid h-auto grid-cols-1 gap-1 sm:grid-cols-3">
           <TabsTrigger value="infrastructure">Infrastructure</TabsTrigger>
@@ -325,7 +363,11 @@ export default function SystemPage() {
                 <CardDescription className="text-xs uppercase tracking-wide">System uptime</CardDescription>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Timer className="size-4 text-muted-foreground" />
-                  {String((health.system as any)?.uptime ?? "Unknown")}
+                  {formatUptime(
+                    getAny(health.system as any, ["uptime", "uptimeHuman", "uptimeSeconds"]) ??
+                      getAny(currentMetrics, ["uptime", "uptimeHuman"]) ??
+                      "Unknown",
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-xs text-muted-foreground">Runtime since last restart.</CardContent>
@@ -468,28 +510,31 @@ export default function SystemPage() {
                 ) : (
                   <ScrollArea className="h-[280px] pr-2">
                     <div className="space-y-2">
-                      {health.processes?.slice(0, 20).map((processInfo, idx) => (
-                        <div key={idx} className="rounded-md border p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">
-                                {String(processInfo.name ?? processInfo.actor ?? `Process ${idx + 1}`)}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">PID {String(processInfo.pid ?? "—")}</p>
+                      {health.processes?.slice(0, 20).map((processInfo, idx) => {
+                        const processStatus = getProcessStatus(processInfo);
+                        return (
+                          <div key={idx} className="rounded-md border p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">
+                                  {String(processInfo.name ?? processInfo.command ?? processInfo.actor ?? `Process ${idx + 1}`)}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">PID {String(processInfo.pid ?? "—")}</p>
+                              </div>
+                              <span
+                                className={cn("mt-1 inline-block size-2 shrink-0 rounded-full", processDotClass(processStatus))}
+                                title={String(processStatus ?? "unknown")}
+                              />
                             </div>
-                            <span
-                              className={cn("mt-1 inline-block size-2 shrink-0 rounded-full", processDotClass(processInfo.status))}
-                              title={String(processInfo.status ?? "unknown")}
-                            />
+                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs text-muted-foreground">
+                                Uptime {formatUptime(processInfo.uptime ?? (processInfo.uptimeMs ? Number(processInfo.uptimeMs) / 1000 : undefined))}
+                              </p>
+                              {statusPill(processStatus)}
+                            </div>
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">
-                              Uptime {formatUptime(processInfo.uptime)}
-                            </p>
-                            {statusPill(String(processInfo.status ?? "unknown"))}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 )}
@@ -538,6 +583,7 @@ export default function SystemPage() {
                 <div className="space-y-3">
                   {jobs.map((job, idx) => {
                     const lastRunAt = job.lastRun?.at ?? job.lastRun?.timestamp;
+                    const normalizedCronStatus = job.enabled === false ? "paused" : cronRunStatus(job.lastRun);
                     return (
                       <Card key={job.slug ?? idx} className={cn("border-border/70", job.enabled === false && "opacity-75")}>
                         <CardContent className="pt-5 space-y-2">
@@ -546,7 +592,7 @@ export default function SystemPage() {
                               <p className="font-medium">{job.name ?? job.slug ?? "Scheduled task"}</p>
                               <p className="text-xs text-muted-foreground">{niceSchedule(job)}</p>
                             </div>
-                            {statusPill(job.lastRun?.status ?? (job.enabled === false ? "paused" : "ok"))}
+                            {statusPill(normalizedCronStatus)}
                           </div>
 
                           <div className="grid gap-1 text-xs text-muted-foreground md:grid-cols-2">

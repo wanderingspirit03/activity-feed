@@ -99,6 +99,7 @@ export default function HomePage() {
   const scoreEntries: any[] = scoresQuery?.data?.entries ?? [];
   const scoreTotals = scoresQuery?.data?.totals;
   const health = healthQuery?.data;
+  const hasErrors = Boolean(runsQuery?.error || scoresQuery?.error || healthQuery?.error);
 
   const liveRunsRaw = useLiveStore((s: any) => s.runs);
 
@@ -111,7 +112,7 @@ export default function HomePage() {
 
   const recentActivities = useMemo(() => {
     const flat: ActivityLike[] = liveRuns.flatMap((run: any) => {
-      const list = Array.isArray(run?.activities) ? run.activities : [];
+      const list = Array.isArray(run?.tools) ? run.tools : Array.isArray(run?.activities) ? run.activities : [];
       return list.map((a: any) => ({ ...a, runId: a?.runId ?? run?.runId }));
     });
 
@@ -121,7 +122,16 @@ export default function HomePage() {
       .slice(0, 5);
   }, [liveRuns]);
 
-  const activeTasks = runs.filter((run) => (run.primaryStatus ?? "").toLowerCase() === "running").length;
+  const activeStatuses = new Set(["running", "waiting_tool", "waiting_llm", "waiting_human", "retrying"]);
+  const activeTasks = runs.filter((run) => {
+    const status = (run.primaryStatus ?? "").toLowerCase();
+    return activeStatuses.has(status) || status.includes("running") || status.includes("active") || status.includes("processing");
+  }).length;
+
+  const liveActiveTasks = liveRuns.filter((run: any) => {
+    const status = (run?.status ?? "").toLowerCase();
+    return status === "working" || status === "running" || status === "queued" || status === "understanding";
+  }).length;
 
   const successRate = useMemo(() => {
     if (scoreEntries.length === 0) return 0;
@@ -143,11 +153,22 @@ export default function HomePage() {
 
   const healthSignal = useMemo(() => {
     const current = health?.current;
-    const textBlob = JSON.stringify(current ?? {}).toLowerCase();
-    if (textBlob.includes("critical") || textBlob.includes("down") || textBlob.includes("error")) {
+    if (!current) return { label: "Unknown", tone: "neutral" as const };
+
+    // Check specific structured fields first
+    const metrics = current?.metrics ?? current;
+    const redisStatus = metrics?.redis?.status ?? metrics?.redisStatus ?? "";
+    const overallStatus = metrics?.status ?? current?.status ?? "";
+
+    const badIndicators = ["critical", "down", "error", "failed", "unreachable"];
+    const warnIndicators = ["warn", "degraded", "stale", "slow"];
+
+    const checkStr = [redisStatus, overallStatus, JSON.stringify(current ?? {})].join(" ").toLowerCase();
+
+    if (badIndicators.some((ind) => checkStr.includes(ind))) {
       return { label: "Needs Attention", tone: "bad" as const };
     }
-    if (textBlob.includes("warn") || textBlob.includes("degraded")) {
+    if (warnIndicators.some((ind) => checkStr.includes(ind))) {
       return { label: "Watch", tone: "warn" as const };
     }
     return { label: "Healthy", tone: "good" as const };
@@ -178,13 +199,26 @@ export default function HomePage() {
         <p className="text-sm text-muted-foreground">One place to track tasks, quality, and system wellbeing.</p>
       </section>
 
+      {hasErrors && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-red-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-red-300">Some data couldn't be loaded</p>
+            <p className="text-xs text-red-200/70">
+              {runsQuery?.error ? "Tasks " : ""}{scoresQuery?.error ? "Scores " : ""}{healthQuery?.error ? "Health " : ""}
+              — showing last available data.
+            </p>
+          </div>
+        </div>
+      )}
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {metricCard({
           title: "Active Tasks",
-          value: isLoading ? "…" : String(activeTasks),
+          value: isLoading ? "…" : String(Math.max(activeTasks, liveActiveTasks)),
           subtitle: isLoading ? "Checking live work" : `${runs.length} tasks in recent view`,
           icon: <Activity className="size-4" />,
-          tone: activeTasks > 0 ? "neutral" : "good",
+          tone: Math.max(activeTasks, liveActiveTasks) > 0 ? "neutral" : "good",
         })}
 
         {metricCard({

@@ -147,6 +147,7 @@ const opsState = new Map<string, OpsData>();
 const clients = new Set<WebSocket>();
 const featureToolActivity = new Map<string, ToolActivity[]>();
 const workerRunToFeature = new Map<string, string>();
+const runCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const server = createServer((req, res) => {
 	const pathname = (req.url || "").split("?")[0];
@@ -617,7 +618,7 @@ function translateEvent(raw: Record<string, string>, streamId: string): Activity
 			};
 		}
 		case "tool.error":
-			return { ...base, title: "Hit a small bump — working around it…", icon: "alert-triangle", progress: currentProgress };
+			return { ...base, title: "Hit a small bump — working around it…", icon: "alert-triangle", isActive: false, progress: currentProgress };
 		case "subagent.spawn":
 			return { ...base, title: "A specialist is helping out…", icon: "users", progress: Math.min(currentProgress + 5, 95) };
 		case "subagent.done":
@@ -664,11 +665,18 @@ function processEvent(fields: string[], streamId: string) {
 		tool_error: "tool.error",
 		llm_start: "llm.start",
 		llm_end: "llm.done",
-		actor_stopped: "run.done",
 		async_task_dispatched: "subagent.spawn",
-		async_task_started: "subagent.done", // not exact, but close enough for activity feed
+		async_task_started: "subagent.spawn",
+		async_task_completed: "subagent.done",
 	};
 	raw.type = typeMap[raw.type] || raw.type;
+	if (raw.type === "actor_stopped") {
+		const actor = parsedData.actor || raw.actor || "";
+		if (actor === "/orchestrator" || !actor.includes("/")) {
+			raw.type = "run.done";
+		}
+		// Otherwise ignore — subagent stopping shouldn't mark the run as done
+	}
 	if (typeof parsedData.runId === "string") {
 		raw.runId = parsedData.runId;
 	}
@@ -729,20 +737,29 @@ function processEvent(fields: string[], streamId: string) {
 		}
 	}
 
-	// Handle run.start — create the run
+	// Handle run.start — create the run idempotently
 	if (type === "run.start") {
-		const task = raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
-		const newRun: RunOverview = {
-			runId,
-			task,
-			phase: "queued",
-			progress: 5,
-			startedAt: Number(raw.ts) || Date.now(),
-			updatedAt: Date.now(),
-			activities: [],
-			specialist: getSpecialistName(task),
-		};
-		runs.set(runId, newRun);
+		if (!runs.has(runId)) {
+			const task = raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
+			const newRun: RunOverview = {
+				runId,
+				task,
+				phase: "queued",
+				progress: 5,
+				startedAt: Number(raw.ts) || Date.now(),
+				updatedAt: Date.now(),
+				activities: [],
+				specialist: getSpecialistName(task),
+			};
+			runs.set(runId, newRun);
+		} else {
+			const existingRun = runs.get(runId)!;
+			const newTask = raw.task || parsedData?.payload?.task || parsedData?.task || "";
+			if (newTask && (!existingRun.task || existingRun.task === "Working on something…")) {
+				existingRun.task = newTask;
+				existingRun.specialist = getSpecialistName(newTask);
+			}
+		}
 	}
 
 	const activity = translateEvent(raw, streamId);
@@ -776,7 +793,15 @@ function processEvent(fields: string[], streamId: string) {
 
 	// Clean up completed runs after 1 hour
 	if (activity.phase === "complete" || activity.phase === "error") {
-		setTimeout(() => runs.delete(runId), 3600000);
+		const existingTimer = runCleanupTimers.get(runId);
+		if (existingTimer) clearTimeout(existingTimer);
+		runCleanupTimers.set(
+			runId,
+			setTimeout(() => {
+				runs.delete(runId);
+				runCleanupTimers.delete(runId);
+			}, 3600000),
+		);
 	}
 
 	broadcast({ type: "activity", data: activity });
