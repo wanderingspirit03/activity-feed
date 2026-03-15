@@ -502,17 +502,19 @@ function translateEvent(event: NormalizedEvent, currentProgress: number, nextPro
         progress: nextProgress,
       };
 
-    case "tool.error":
+    case "tool.error": {
+      const briefErr = event.toolArgs ? String(event.toolArgs).slice(0, 80).replace(/\n/g, " ") : "";
       return {
         ...base,
         phase: "working",
-        title: "Hit a small bump — working around it…",
+        title: briefErr || "Hit a small bump — working around it…",
         description: event.toolName ? toolFriendlyNames[event.toolName]?.title || event.toolName : undefined,
         icon: "alert-triangle",
         toolName: event.toolName || undefined,
         toolArgs: event.toolArgs || undefined,
         progress: currentProgress,
       };
+    }
 
     case "tool.done": {
       const friendly = toolFriendlyNames[event.toolName] || {
@@ -597,9 +599,10 @@ function translateEvent(event: NormalizedEvent, currentProgress: number, nextPro
         title: "Working on the next step…",
         icon: "sparkles",
       };
+      const briefArg = event.toolArgs ? String(event.toolArgs).slice(0, 80).replace(/\n/g, " ") : "";
       return {
         ...base,
-        title: friendly.title,
+        title: briefArg || friendly.title,
         description: friendly.title,
         icon: friendly.icon,
         toolName: event.toolName || undefined,
