@@ -1,29 +1,41 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import type { ReactNode } from "react";
+
 import "./globals.css";
 
-const inter = Inter({
-	subsets: ["latin"],
-	variable: "--font-inter",
-});
+import { BottomTabs } from "@/components/layout/bottom-tabs";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Providers } from "@/app/providers";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-	title: "olo · activity",
-	description: "Real-time activity feed",
+	title: "Control Center",
+	description: "Unified monitoring dashboard",
 };
 
-export default function RootLayout({
-	children,
-}: {
-	children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
 	return (
 		<html lang="en" className="dark">
-			<body className={`${inter.variable} font-sans antialiased`}>
-				<TooltipProvider delayDuration={300}>
-					{children}
-				</TooltipProvider>
+			<body className={cn(inter.className, "min-h-screen bg-background text-foreground")}>
+				<Providers>
+					<div className="flex min-h-screen">
+						{/* Sidebar — desktop only */}
+						<aside className="hidden md:flex md:w-[240px] md:shrink-0 md:flex-col border-r border-border bg-card">
+							<Sidebar />
+						</aside>
+
+						{/* Main content */}
+						<main className="flex-1 min-w-0 overflow-x-hidden pb-20 md:pb-0">
+							{children}
+						</main>
+					</div>
+
+					{/* Bottom tabs — mobile only */}
+					<BottomTabs />
+				</Providers>
 			</body>
 		</html>
 	);

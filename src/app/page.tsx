@@ -1,395 +1,380 @@
 "use client";
 
-import { useActivityFeed } from "@/hooks/useActivityFeed";
-import { ConnectionStatus } from "@/components/feed/ConnectionStatus";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { useMemo, type ReactNode } from "react";
 import {
-  Tool,
-  ToolHeader,
-  ToolContent,
-} from "@/components/ai-elements/tool";
-import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from "@/components/ai-elements/reasoning";
-import {
-  Task,
-  TaskTrigger,
-  TaskContent,
-  TaskItem,
-} from "@/components/ai-elements/task";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-import {
-  CheckCircle,
-  Clock,
-  AlertTriangle,
   Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Coffee,
+  ShieldAlert,
+  Timer,
   Zap,
-  Brain,
-  Eye,
-  Box,
 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Shimmer } from "@/components/ai-elements/shimmer";
+import { formatDuration, formatRelative } from "@/lib/format";
+import { useRuns, useScores, useHealth } from "@/hooks/use-api";
+import { useLiveStore } from "@/stores/live-store";
 import { cn } from "@/lib/utils";
-import type { ActivityItem, RunOverview, RunPhase } from "@/lib/types";
 
-/* ── helpers ───────────────────────────────────────── */
+type RunLike = {
+  runId?: string;
+  taskPreview?: string;
+  summaryPreview?: string;
+  primaryStatus?: string;
+  doneStatus?: string;
+  lastAt?: number;
+  startedAt?: number;
+  stuckFlag?: boolean;
+  hasDlq?: boolean;
+  hasHandlerErrors?: boolean;
+};
 
-function getToolState(a: ActivityItem) {
-  if (a.isActive) return "input-available" as const;
-  if (a.phase === "complete" || !a.isActive) return "output-available" as const;
-  if (a.phase === "error") return "output-error" as const;
-  return "input-streaming" as const;
-}
+type ActivityLike = {
+  id?: string;
+  runId?: string;
+  title?: string;
+  phase?: string;
+  timestamp?: number;
+  description?: string;
+};
 
-/** Map icon string from server to check if it's a tool-type activity */
-function isToolActivity(a: ActivityItem) {
-  const toolIcons = ["terminal", "search", "file-text", "files", "pen-line", "folder-search", "globe", "send", "folder", "monitor", "microscope", "brain", "save", "bookmark", "message-circle", "sparkles", "check"];
-  return a.toolName || toolIcons.includes(a.icon || "");
-}
+function statusPill(status?: string) {
+  const s = (status ?? "").toLowerCase();
 
-function isThinkingActivity(a: ActivityItem) {
-  return a.icon === "brain" && !a.toolName;
-}
-
-function isSubagentActivity(a: ActivityItem) {
-  return a.icon === "users" || a.toolName === "run_subagent";
-}
-
-function phaseLabel(phase: RunPhase) {
-  switch (phase) {
-    case "queued": return "Queued";
-    case "understanding": return "Understanding";
-    case "working": return "Working";
-    case "reviewing": return "Reviewing";
-    case "complete": return "Complete";
-    case "error": return "Error";
+  if (s.includes("running") || s.includes("processing") || s.includes("active")) {
+    return <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/30">Running</Badge>;
   }
-}
-
-function phaseColor(phase: RunPhase) {
-  switch (phase) {
-    case "queued": return "text-zinc-400";
-    case "understanding": return "text-blue-400";
-    case "working": return "text-amber-400";
-    case "reviewing": return "text-purple-400";
-    case "complete": return "text-emerald-400";
-    case "error": return "text-red-400";
+  if (s.includes("complete") || s.includes("success") || s.includes("done") || s.includes("ok")) {
+    return <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">Completed</Badge>;
   }
-}
-
-function elapsed(startedAt: number) {
-  const s = Math.floor((Date.now() - startedAt) / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  return `${m}m ${s % 60}s`;
-}
-
-function timeAgo(ts: number) {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
-}
-
-function truncateText(text: string, max = 100) {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "…";
-}
-
-/* ── Tool Activity Card ──────────────────────────── */
-
-function ToolCard({ activity, isLatest }: { activity: ActivityItem; isLatest: boolean }) {
-  const toolName = activity.toolName || "tool";
-  const state = getToolState(activity);
-  // Show tool name + args preview in header for at-a-glance readability
-  const argsPreview = activity.toolArgs ? truncateText(activity.toolArgs, 40) : "";
-  const displayTitle = argsPreview ? `${toolName} — ${argsPreview}` : toolName;
-
-  return (
-    <Tool defaultOpen={isLatest && activity.isActive}>
-      <ToolHeader
-        type="dynamic-tool"
-        state={state}
-        toolName={toolName}
-        title={displayTitle}
-      />
-      {(activity.toolArgs || activity.description) && (
-        <ToolContent>
-          {activity.description && activity.description !== toolName && (
-            <p className="text-xs text-muted-foreground mb-2">{activity.description}</p>
-          )}
-          {activity.toolArgs && (
-            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono">
-              {truncateText(activity.toolArgs, 500)}
-            </pre>
-          )}
-        </ToolContent>
-      )}
-    </Tool>
-  );
-}
-
-/* ── Thinking/Reasoning Card ─────────────────────── */
-
-function ThinkingCard({ activity }: { activity: ActivityItem }) {
-  const dur = activity.isActive ? undefined : Math.max(1, Math.floor((Date.now() - activity.timestamp) / 1000));
-
-  return (
-    <Reasoning
-      isStreaming={activity.isActive || false}
-      duration={dur}
-      defaultOpen={activity.isActive}
-    >
-      <ReasoningTrigger />
-      <ReasoningContent>
-        {activity.description || activity.title}
-      </ReasoningContent>
-    </Reasoning>
-  );
-}
-
-/* ── Subagent Card ───────────────────────────────── */
-
-function SubagentCard({ activity, isLatest }: { activity: ActivityItem; isLatest: boolean }) {
-  return (
-    <Task defaultOpen={isLatest}>
-      <TaskTrigger title={activity.title} />
-      <TaskContent>
-        {activity.toolArgs && (
-          <TaskItem>
-            <span className="text-xs text-muted-foreground">{truncateText(activity.toolArgs, 200)}</span>
-          </TaskItem>
-        )}
-        {activity.isActive && (
-          <TaskItem>
-            <Shimmer duration={2} className="text-xs">Running...</Shimmer>
-          </TaskItem>
-        )}
-        {!activity.isActive && (
-          <TaskItem>
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <CheckCircle className="size-3" /> Completed
-            </span>
-          </TaskItem>
-        )}
-      </TaskContent>
-    </Task>
-  );
-}
-
-/* ── Active Run View ─────────────────────────────── */
-
-// Merge consecutive tool.start + tool.done for same tool into one entry
-function deduplicateActivities(activities: ActivityItem[]): ActivityItem[] {
-  const result: ActivityItem[] = [];
-  for (let i = 0; i < activities.length; i++) {
-    const current = activities[i];
-    const next = activities[i + 1];
-    // If this is an active tool and the next is the same tool completed, merge
-    if (current.toolName && next?.toolName === current.toolName
-        && current.isActive && !next.isActive
-        && next.timestamp - current.timestamp < 30000) {
-      result.push({ ...next, toolArgs: current.toolArgs || next.toolArgs });
-      i++; // skip the next one
-    } else {
-      result.push(current);
-    }
+  if (s.includes("stuck") || s.includes("timeout")) {
+    return <Badge className="bg-yellow-500/15 text-yellow-300 border-yellow-500/30">Stuck</Badge>;
   }
-  return result;
+  if (s.includes("fail") || s.includes("error")) {
+    return <Badge className="bg-red-500/15 text-red-300 border-red-500/30">Failed</Badge>;
+  }
+  return <Badge variant="secondary">Queued</Badge>;
 }
 
-function ActiveRunView({ run }: { run: RunOverview }) {
-  const activities = deduplicateActivities([...run.activities]);
-  const toolCount = activities.filter(a => a.toolName).length;
+function metricCard(props: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: ReactNode;
+  tone?: "good" | "warn" | "bad" | "neutral";
+}) {
+  const toneClass =
+    props.tone === "good"
+      ? "border-emerald-500/30"
+      : props.tone === "warn"
+        ? "border-yellow-500/30"
+        : props.tone === "bad"
+          ? "border-red-500/30"
+          : "border-border";
 
   return (
-    <div className="space-y-5">
-      {/* Run header */}
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="text-base font-medium text-foreground leading-snug min-w-0 flex-1">
-            {truncateText(run.task, 140)}
-          </h2>
-          <Badge variant="outline" className="shrink-0 gap-1.5 border-amber-500/30 text-amber-400 text-[10px]">
-            <Activity className="h-3 w-3 animate-pulse" />
-            Live
-          </Badge>
-        </div>
-
-        {/* Phase + progress */}
-        <div className="flex items-center gap-3">
-          <span className={cn("text-xs font-medium flex items-center gap-1.5", phaseColor(run.phase))}>
-            <Zap className="size-3" />
-            {phaseLabel(run.phase)}
-          </span>
-          <Progress value={run.progress} className="h-1 flex-1" />
-          <span className="text-[11px] text-muted-foreground tabular-nums">{elapsed(run.startedAt)}</span>
-        </div>
-
-        {toolCount > 0 && (
-          <Badge variant="secondary" className="gap-1 text-[10px]">
-            <Box className="size-3" /> {toolCount} tools
-          </Badge>
-        )}
-      </div>
-
-      {/* Shimmer for active phase */}
-      {run.phase !== "complete" && run.phase !== "error" && (
-        <Shimmer className="text-sm font-medium" duration={1.5}>
-          {run.phase === "understanding"
-            ? "Understanding the task..."
-            : run.phase === "reviewing"
-            ? "Reviewing the results..."
-            : "Working on implementation..."}
-        </Shimmer>
-      )}
-
-      {/* Activity stream */}
-      <div className="space-y-1">
-        {activities.map((a, i) => {
-          const isLatest = i === activities.length - 1;
-
-          if (isSubagentActivity(a)) {
-            return <SubagentCard key={a.id} activity={a} isLatest={isLatest} />;
-          }
-
-          if (isThinkingActivity(a)) {
-            return <ThinkingCard key={a.id} activity={a} />;
-          }
-
-          if (isToolActivity(a)) {
-            return <ToolCard key={a.id} activity={a} isLatest={isLatest} />;
-          }
-
-          // Default line item
-          return (
-            <div key={a.id} className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground">
-              <div className={cn(
-                "h-1.5 w-1.5 rounded-full shrink-0",
-                a.isActive ? "bg-blue-400 animate-pulse" : "bg-zinc-600"
-              )} />
-              <span className="truncate">{a.title}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <Card className={cn("bg-card", toneClass)}>
+      <CardHeader className="pb-3">
+        <CardDescription className="flex items-center justify-between text-xs uppercase tracking-wide">
+          <span>{props.title}</span>
+          <span className="text-muted-foreground">{props.icon}</span>
+        </CardDescription>
+        <CardTitle className="text-2xl">{props.value}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0 text-xs text-muted-foreground">{props.subtitle}</CardContent>
+    </Card>
   );
 }
-
-/* ── Completed Run Card ──────────────────────────── */
-
-function CompletedRunCard({ run }: { run: RunOverview }) {
-  const isError = run.phase === "error";
-  const toolCount = run.activities.filter(a => a.toolName).length;
-
-  return (
-    <div className={cn(
-      "group rounded-lg border p-3.5 transition-all hover:bg-muted/30",
-      isError ? "border-red-500/20" : "border-border"
-    )}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
-            {truncateText(run.task, 100)}
-          </p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              {isError ? <AlertTriangle className="size-3 text-red-400" /> : <CheckCircle className="size-3 text-emerald-400" />}
-              {isError ? "Failed" : "Completed"}
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span>{toolCount} tools</span>
-            <span className="text-muted-foreground/40">·</span>
-            <span>{elapsed(run.startedAt)}</span>
-            <span className="text-muted-foreground/40">·</span>
-            <span>{timeAgo(run.updatedAt)}</span>
-          </div>
-        </div>
-        <Progress
-          value={100}
-          className={cn("h-1 w-12 shrink-0 mt-1.5", isError ? "[&>div]:bg-red-400" : "[&>div]:bg-emerald-400")}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ── Empty State ─────────────────────────────────── */
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/20">
-        <Zap className="h-6 w-6 text-muted-foreground/40" />
-      </div>
-      <p className="text-sm font-medium text-muted-foreground">No active runs</p>
-      <p className="mt-1 text-xs text-muted-foreground/50">Activity will appear here when tasks are running</p>
-    </div>
-  );
-}
-
-/* ── Main Page ───────────────────────────────────── */
 
 export default function HomePage() {
-  const { runs, isConnected } = useActivityFeed();
+  const runsQuery = useRuns() as any;
+  const scoresQuery = useScores() as any;
+  const healthQuery = useHealth() as any;
 
-  const activeRuns = runs.filter(r => r.phase !== "complete" && r.phase !== "error");
-  const completedRuns = runs.filter(r => r.phase === "complete" || r.phase === "error");
-  const activeRun = activeRuns[0];
+  const runs: RunLike[] = runsQuery?.data?.runs ?? [];
+  const scoreEntries: any[] = scoresQuery?.data?.entries ?? [];
+  const scoreTotals = scoresQuery?.data?.totals;
+  const health = healthQuery?.data;
+  const hasErrors = Boolean(runsQuery?.error || scoresQuery?.error || healthQuery?.error);
+  const errorSources = [
+    runsQuery?.error ? "tasks" : null,
+    scoresQuery?.error ? "scores" : null,
+    healthQuery?.error ? "health" : null,
+  ].filter(Boolean) as string[];
+
+  const liveRunsRaw = useLiveStore((s: any) => s.runs);
+
+  const liveRuns = useMemo(() => {
+    if (liveRunsRaw instanceof Map) return Array.from(liveRunsRaw.values()) as any[];
+    if (Array.isArray(liveRunsRaw)) return liveRunsRaw as any[];
+    if (liveRunsRaw && typeof liveRunsRaw === "object") return Object.values(liveRunsRaw as Record<string, any>);
+    return [] as any[];
+  }, [liveRunsRaw]);
+
+  const recentActivities = useMemo(() => {
+    const flat: ActivityLike[] = liveRuns.flatMap((run: any) => {
+      const list = Array.isArray(run?.tools) ? run.tools : Array.isArray(run?.activities) ? run.activities : [];
+      return list.map((a: any) => ({ ...a, runId: a?.runId ?? run?.runId }));
+    });
+
+    return flat
+      .filter((a) => Number.isFinite(a.timestamp))
+      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+      .slice(0, 5);
+  }, [liveRuns]);
+
+  const activeStatuses = new Set(["running", "waiting_tool", "waiting_llm", "waiting_human", "retrying"]);
+  const activeTasks = runs.filter((run) => {
+    const status = (run.primaryStatus ?? "").toLowerCase();
+    return activeStatuses.has(status) || status.includes("running") || status.includes("active") || status.includes("processing");
+  }).length;
+
+  const liveActiveTasks = liveRuns.filter((run: any) => {
+    const status = (run?.status ?? "").toLowerCase();
+    return status === "working" || status === "running" || status === "queued" || status === "understanding";
+  }).length;
+
+  const successRate = useMemo(() => {
+    if (scoreEntries.length === 0) return null;
+    const successCount = scoreEntries.filter((entry: any) => {
+      const status = String(entry?.status ?? "").toLowerCase();
+      return status.includes("ok") || status.includes("success") || status.includes("complete");
+    }).length;
+    return Math.round((successCount / scoreEntries.length) * 100);
+  }, [scoreEntries]);
+
+  const avgDurationMs = useMemo(() => {
+    const durations = scoreEntries
+      .map((entry: any) => Number(entry?.stats?.durationMs ?? 0))
+      .filter((value: number) => Number.isFinite(value) && value > 0);
+
+    if (durations.length === 0) return 0;
+    return Math.round(durations.reduce((sum, n) => sum + n, 0) / durations.length);
+  }, [scoreEntries]);
+
+  const healthSignal = useMemo(() => {
+    const current = health?.current;
+    if (!current) return { label: "Checking...", tone: "neutral" as const };
+
+    const metrics = current?.metrics ?? current;
+    const redisStatus = metrics?.redis?.status ?? metrics?.redisStatus ?? "";
+    const overallStatus = metrics?.status ?? current?.status ?? "";
+
+    const badIndicators = ["critical", "down", "error", "failed", "unreachable"];
+    const warnIndicators = ["warn", "degraded", "stale", "slow"];
+
+    const checkStr = [redisStatus, overallStatus, JSON.stringify(current ?? {})].join(" ").toLowerCase();
+
+    if (badIndicators.some((ind) => checkStr.includes(ind))) {
+      return { label: "Needs Attention", tone: "bad" as const };
+    }
+    if (warnIndicators.some((ind) => checkStr.includes(ind))) {
+      return { label: "Watch", tone: "warn" as const };
+    }
+    return { label: "Healthy", tone: "good" as const };
+  }, [health]);
+
+  const failedRuns = runs.filter((run) => {
+    const status = (run.primaryStatus ?? run.doneStatus ?? "").toLowerCase();
+    return status.includes("fail") || status.includes("error") || run.hasDlq || run.hasHandlerErrors;
+  });
+
+  const stuckRuns = runs.filter((run) => {
+    const status = (run.primaryStatus ?? "").toLowerCase();
+    return run.stuckFlag || status.includes("stuck") || status.includes("timeout");
+  });
+
+  const healthAlerts = healthSignal.tone !== "good" ? [healthSignal.label] : [];
+
+  const recentTasks = [...runs]
+    .sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0))
+    .slice(0, 10);
+
+  const isLoading = Boolean(runsQuery?.isLoading || scoresQuery?.isLoading || healthQuery?.isLoading);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground">
-              <Zap className="h-4 w-4 text-background" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight">olo · activity</span>
+    <main className="mx-auto max-w-7xl p-4 md:p-8 space-y-6">
+      <section className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-semibold">Control Center</h1>
+        <p className="text-sm text-muted-foreground">One place to track tasks, quality, and system wellbeing.</p>
+      </section>
+
+      {hasErrors && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-amber-300 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-100">A few panels are still catching up</p>
+            <p className="text-xs text-amber-100/75">
+              {errorSources.length > 0 ? `${errorSources.join(", ")} may refresh shortly.` : "Refreshing data…"} Showing the latest data we have in the meantime.
+            </p>
           </div>
-          <ConnectionStatus isConnected={isConnected} />
         </div>
-      </header>
+      )}
 
-      {/* Content */}
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
-        {activeRun ? (
-          <ActiveRunView run={activeRun} />
-        ) : (
-          <EmptyState />
-        )}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {metricCard({
+          title: "Active Tasks",
+          value: isLoading ? "…" : String(Math.max(activeTasks, liveActiveTasks)),
+          subtitle: isLoading ? "Checking live work" : `${runs.length} tasks in recent view`,
+          icon: <Activity className="size-4" />,
+          tone: Math.max(activeTasks, liveActiveTasks) > 0 ? "neutral" : "good",
+        })}
 
-        {completedRuns.length > 0 && (
-          <>
-            <Separator className="my-8" />
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                <CheckCircle className="size-3" />
-                Recent
-              </h3>
-              <div className="space-y-2">
-                {completedRuns.map(run => (
-                  <CompletedRunCard key={run.runId} run={run} />
-                ))}
+        {metricCard({
+          title: "Success Rate",
+          value: isLoading ? "…" : successRate === null ? "—" : `${successRate}%`,
+          subtitle: isLoading ? "Reading score history" : scoreEntries.length === 0 ? "No scored tasks yet" : `${scoreEntries.length} tasks scored`,
+          icon: <CheckCircle2 className="size-4" />,
+          tone: successRate === null ? "neutral" : successRate >= 80 ? "good" : successRate >= 60 ? "warn" : "bad",
+        })}
+
+        {metricCard({
+          title: "Avg Duration",
+          value: isLoading ? "…" : avgDurationMs > 0 ? formatDuration(avgDurationMs) : "—",
+          subtitle: isLoading ? "Calculating timing" : avgDurationMs > 0 ? "Based on scored tasks" : "No timing data yet",
+          icon: <Timer className="size-4" />,
+          tone: "neutral",
+        })}
+
+        {metricCard({
+          title: "System Health",
+          value: isLoading ? "…" : healthSignal.label,
+          subtitle: isLoading ? "Checking services" : "Realtime health snapshot",
+          icon: <ShieldAlert className="size-4" />,
+          tone: healthSignal.tone,
+        })}
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Activity</CardTitle>
+            <CardDescription>Latest live updates from active assistants.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentActivities.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Coffee className="size-4" />
+                <span>No live activity yet.</span>
               </div>
-            </div>
-          </>
-        )}
-      </main>
+            ) : (
+              recentActivities.map((activity) => (
+                <div key={activity.id ?? `${activity.runId}-${activity.timestamp}`} className="rounded-md border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{activity.title ?? "Task update"}</p>
+                    <Badge variant="secondary" className="capitalize">{activity.phase ?? "working"}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground truncate">
+                    {activity.description ?? "In progress"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {activity.timestamp ? formatRelative(activity.timestamp) : "just now"}
+                  </p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Footer */}
-      <footer className="border-t border-border/30 py-3">
-        <div className="mx-auto max-w-2xl px-4">
-          <p className="text-center text-[10px] text-muted-foreground/40">
-            olo-din · real-time agent telemetry
-          </p>
-        </div>
-      </footer>
-    </div>
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-lg">Attention Alerts</CardTitle>
+            <CardDescription>Things that may need a quick check.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {failedRuns.length === 0 && stuckRuns.length === 0 && healthAlerts.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-300">
+                <CheckCircle2 className="size-4" />
+                <span>Everything looks steady right now.</span>
+              </div>
+            ) : (
+              <>
+                {failedRuns.slice(0, 3).map((run) => (
+                  <div key={`failed-${run.runId}`} className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+                    <p className="text-sm font-medium text-red-200">Task failed</p>
+                    <p className="text-xs text-red-100/80 truncate">{run.taskPreview ?? run.summaryPreview ?? run.runId}</p>
+                  </div>
+                ))}
+
+                {stuckRuns.slice(0, 3).map((run) => (
+                  <div key={`stuck-${run.runId}`} className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
+                    <p className="text-sm font-medium text-yellow-200">Task appears stuck</p>
+                    <p className="text-xs text-yellow-100/80 truncate">{run.taskPreview ?? run.summaryPreview ?? run.runId}</p>
+                  </div>
+                ))}
+
+                {healthAlerts.map((alert, idx) => (
+                  <div key={`health-${idx}`} className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
+                    <p className="text-sm font-medium text-yellow-200">System warning</p>
+                    <p className="text-xs text-yellow-100/80">{alert}</p>
+                  </div>
+                ))}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Zap className="size-4" />
+            Recent Tasks
+          </CardTitle>
+          <CardDescription>Latest 10 tasks in progress or recently completed.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-sm text-muted-foreground">
+              <Shimmer>Loading task list…</Shimmer>
+            </div>
+          ) : recentTasks.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Coffee className="size-4" />
+              <span>No tasks to show yet.</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentTasks.map((run, idx) => (
+                <div key={run.runId ?? idx} className="rounded-md border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-sm truncate max-w-[70%]">
+                      {run.taskPreview ?? run.summaryPreview ?? "Untitled task"}
+                    </p>
+                    {statusPill(run.primaryStatus ?? run.doneStatus)}
+                  </div>
+
+                  <Separator className="my-2" />
+
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                    <span>ID: {run.runId ?? "—"}</span>
+                    <span>Updated: {run.lastAt ? formatRelative(run.lastAt) : "—"}</span>
+                    <span>
+                      Duration:{" "}
+                      {run.startedAt && run.lastAt ? formatDuration(Math.max(0, run.lastAt - run.startedAt)) : "—"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {scoreTotals ? (
+        <p className="text-xs text-muted-foreground">
+          Snapshot: quality {scoreTotals.avgQuality ?? "—"}/10 · efficiency {scoreTotals.avgEfficiency ?? "—"}/10.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground flex items-center gap-2">
+          <AlertTriangle className="size-3" />
+          Score history is still warming up.
+        </p>
+      )}
+    </main>
   );
 }

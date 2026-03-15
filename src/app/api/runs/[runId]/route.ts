@@ -1,35 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-const ACTOR_API_BASE_URL = process.env.ACTOR_API_BASE_URL || "http://localhost:3100";
-const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY || "";
+import { errorJson } from "@/lib/api-error";
+import { getRunDetail } from "@/lib/telemetry";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(
-	request: NextRequest,
-	context: { params: Promise<{ runId: string }> },
+  _request: Request,
+  context: { params: Promise<{ runId: string }> },
 ) {
-	const { runId } = await context.params;
-	const searchParams = request.nextUrl.searchParams.toString();
-	const url = `${ACTOR_API_BASE_URL}/api/runs/${encodeURIComponent(runId)}${searchParams ? `?${searchParams}` : ""}`;
-
-	try {
-		const res = await fetch(url, {
-			headers: {
-				Authorization: `Bearer ${DASHBOARD_API_KEY}`,
-				Accept: "application/json",
-			},
-			signal: AbortSignal.timeout(10_000),
-		});
-
-		if (!res.ok) {
-			return NextResponse.json({ error: `Upstream ${res.status}` }, { status: res.status });
-		}
-
-		const data = await res.json();
-		return NextResponse.json(data);
-	} catch {
-		return NextResponse.json(
-			{ error: "Failed to fetch run detail", run: null },
-			{ status: 502 },
-		);
-	}
+  try {
+    const { runId } = await context.params;
+    const detail = await getRunDetail(runId, 400);
+    return NextResponse.json(detail);
+  } catch (error) {
+    return errorJson("Failed to load run detail", error);
+  }
 }

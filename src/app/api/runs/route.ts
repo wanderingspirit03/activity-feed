@@ -1,31 +1,31 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { errorJson } from "@/lib/api-error";
+import { getRuns } from "@/lib/telemetry";
 
-const ACTOR_API_BASE_URL = process.env.ACTOR_API_BASE_URL || "http://localhost:3100";
-const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY || "";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
-	const searchParams = request.nextUrl.searchParams.toString();
-	const url = `${ACTOR_API_BASE_URL}/api/runs${searchParams ? `?${searchParams}` : ""}`;
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = Number(searchParams.get("limit") ?? "50");
+    const cursor = searchParams.get("cursor");
+    const status = searchParams.get("status") ?? undefined;
+    const tag = searchParams.get("tag") ?? undefined;
+    const q = searchParams.get("q") ?? undefined;
+    const namespace = searchParams.get("namespace") ?? undefined;
 
-	try {
-		const res = await fetch(url, {
-			headers: {
-				Authorization: `Bearer ${DASHBOARD_API_KEY}`,
-				Accept: "application/json",
-			},
-			signal: AbortSignal.timeout(10_000),
-		});
+    const result = await getRuns({
+      limit: Number.isFinite(limit) ? limit : 50,
+      cursor: cursor ? Number(cursor) : undefined,
+      status: status || undefined,
+      tag: tag || undefined,
+      q: q || undefined,
+      namespace: namespace || undefined,
+    });
 
-		if (!res.ok) {
-			return NextResponse.json({ error: `Upstream ${res.status}` }, { status: res.status });
-		}
-
-		const data = await res.json();
-		return NextResponse.json(data);
-	} catch {
-		return NextResponse.json(
-			{ error: "Failed to fetch runs", runs: [], total: 0 },
-			{ status: 502 },
-		);
-	}
+    return NextResponse.json(result);
+  } catch (error) {
+    return errorJson("Failed to load runs", error);
+  }
 }

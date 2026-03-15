@@ -138,7 +138,7 @@ export default function RunDetailPage() {
 							<Card>
 								<CardContent className="p-4 space-y-3">
 									<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Specialist</p>
-									<SpecialistAvatar name={run.specialist} isWorking={run.phase !== "complete" && run.phase !== "error"} />
+									<SpecialistAvatar role={run.specialist ?? "Assistant"} />
 								</CardContent>
 							</Card>
 						)}
