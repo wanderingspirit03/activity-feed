@@ -1,93 +1,129 @@
-"use client";
+"use client"
 
-import { ActivityItem } from "@/lib/types";
-import { formatDistanceToNow } from "date-fns";
-import * as Lucide from "lucide-react";
-import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Brain,
+  CheckCircle,
+  Circle,
+  Eye,
+  FileText,
+  Search,
+  Send,
+  Sparkles,
+  Terminal,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 
-export function ActivityCard({ activity }: { activity: ActivityItem }) {
-  const iconName = activity.icon?.split("-").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("") ?? "";
-  const IconComponent = (Lucide as any)[iconName] || Lucide.Circle;
+import { cn } from "@/lib/utils"
+import { formatRelativeTime } from "@/lib/time"
+import type { ActivityItem } from "@/lib/types"
+
+type ActivityCardProps = {
+  activity: ActivityItem
+  isLatest?: boolean
+}
+
+const iconMap: Record<string, LucideIcon> = {
+  brain: Brain,
+  search: Search,
+  "file-text": FileText,
+  send: Send,
+  terminal: Terminal,
+  users: Users,
+  check: CheckCircle,
+  "alert-triangle": AlertTriangle,
+  sparkles: Sparkles,
+  eye: Eye,
+  circle: Circle,
+}
+
+export function ActivityCard({ activity, isLatest = false }: ActivityCardProps) {
+  const isError = activity.phase === "error"
+  const isComplete = activity.phase === "complete"
+  const isActive = Boolean(activity.isActive)
+  const Icon = isError ? AlertTriangle : (iconMap[activity.icon ?? "circle"] ?? Circle)
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.3 }}
-      className={cn(
-        "relative py-4 pr-4 pl-10 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-white dark:bg-neutral-900 shadow-sm transition-all duration-300",
-        activity.isActive && "ring-2 ring-blue-500 shadow-md",
-        activity.phase === "error" && "border-red-200 bg-red-50 dark:bg-red-950/20"
-      )}
-    >
-      <div className={cn(
-        "absolute left-3 top-[-1px] bottom-[-1px] w-[2px] bg-neutral-200 dark:bg-neutral-800",
-        activity.isActive && "bg-blue-500",
-        activity.phase === "error" && "bg-red-500"
-      )} />
-
-      <div className={cn(
-        "absolute left-1 top-5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center translate-y-[-50%]",
-        activity.isActive ? "border-blue-500 text-blue-500" : "border-neutral-300 dark:border-neutral-600 text-neutral-400",
-        activity.phase === "error" && "border-red-500 text-red-500"
-      )}>
-        {activity.isActive && !activity.phase.includes("error") ? (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          >
-            <Lucide.Loader2 className="w-3 h-3 text-blue-500" />
-          </motion.div>
-        ) : activity.phase === "error" ? (
-          <Lucide.X className="w-2 h-2 text-red-500" />
-        ) : (
-          <Lucide.Check className="w-2 h-2" />
+    <AnimatePresence mode="popLayout">
+      <motion.article
+        key={activity.id}
+        layout
+        initial={{ opacity: 0, x: -18 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 16 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+        className={cn(
+          "group relative overflow-hidden rounded-xl border bg-white px-4 py-3 shadow-sm",
+          "before:absolute before:inset-y-0 before:left-0 before:w-1 before:rounded-full before:bg-transparent",
+          isActive && "border-blue-200 bg-blue-50/60 before:bg-blue-500",
+          isError && "border-amber-200 bg-amber-50/60 before:bg-amber-500",
+          isComplete && "bg-zinc-50/70 text-zinc-600"
         )}
-      </div>
+      >
+        <div className="flex gap-3">
+          <div className="relative flex min-h-[54px] w-8 shrink-0 justify-center">
+            <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-zinc-200" />
 
-      <div className="flex gap-4">
-        <div className={cn(
-          "w-10 h-10 rounded-lg flex items-center justify-center shadow-inner shrink-0",
-          activity.isActive ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
-          activity.phase === "error" && "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-        )}>
-           <IconComponent className="w-5 h-5" />
-        </div>
+            <div
+              className={cn(
+                "relative z-10 mt-1 flex size-8 items-center justify-center rounded-full border bg-white",
+                isActive && "border-blue-300 bg-blue-100 text-blue-700",
+                isComplete && "border-emerald-300 bg-emerald-100 text-emerald-700",
+                isError && "border-amber-300 bg-amber-100 text-amber-700",
+                !isActive && !isComplete && !isError && "border-zinc-300 text-zinc-500"
+              )}
+            >
+              {isComplete ? <CheckCircle className="size-4" /> : <Icon className="size-4" />}
+            </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <h4 className={cn(
-              "font-medium text-sm leading-none m-0",
-              activity.isActive ? "text-neutral-900 dark:text-white" : "text-neutral-600 dark:text-neutral-400",
-              activity.phase === "error" && "text-red-700 dark:text-red-300"
-            )}>
-              {activity.title}
-            </h4>
-            <span className="text-xs text-neutral-400 tabular-nums shrink-0 ml-4">
-              {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
-            </span>
+            {isActive ? (
+              <motion.span
+                className="absolute top-[-2px] right-[-4px] z-20 size-2.5 rounded-full bg-blue-500"
+                animate={{ scale: [1, 1.45, 1], opacity: [1, 0.35, 1] }}
+                transition={{ duration: 1.2, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
+              />
+            ) : null}
           </div>
 
-          {activity.description && (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2 leading-snug">
-              {activity.description}
-            </p>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <h4
+                className={cn(
+                  "text-sm leading-snug font-medium text-zinc-900",
+                  isComplete && "text-zinc-700",
+                  isError && "text-amber-900"
+                )}
+              >
+                {activity.title}
+              </h4>
 
-          {activity.isActive && typeof activity.progress === 'number' && activity.progress > 0 && (
-             <div className="mt-3 w-full bg-neutral-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
-               <motion.div
-                 initial={{ width: 0 }}
-                 animate={{ width: `${Math.min(activity.progress, 100)}%` }}
-                 transition={{ duration: 0.5, ease: "easeOut" }}
-                 className="h-full bg-blue-500 rounded-full"
-               />
-             </div>
-          )}
+              {isLatest ? (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                  Latest
+                </span>
+              ) : null}
+            </div>
+
+            {activity.description ? (
+              <p
+                className={cn(
+                  "mt-1 text-xs leading-relaxed text-zinc-600",
+                  isComplete && "text-zinc-500",
+                  isError && "text-amber-800"
+                )}
+              >
+                {activity.description}
+              </p>
+            ) : null}
+
+            <p className="mt-2 text-[11px] text-zinc-400">{formatRelativeTime(activity.timestamp)}</p>
+          </div>
         </div>
-      </div>
-    </motion.div>
-  );
+      </motion.article>
+    </AnimatePresence>
+  )
 }
+
+export default ActivityCard

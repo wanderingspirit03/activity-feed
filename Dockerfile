@@ -12,12 +12,12 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps && npm install tsx ws ioredis
+RUN npm ci --legacy-peer-deps && npm install tsx ws
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/server.ts ./
-COPY --from=builder /app/next.config.ts ./
+COPY --from=builder /app/next.config.ts ./next.config.ts 2>/dev/null || true
 COPY --from=builder /app/src ./src
 
 ENV NODE_ENV=production

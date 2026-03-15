@@ -1,24 +1,55 @@
-"use client";
+"use client"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check } from "lucide-react"
+import { motion } from "framer-motion"
 
-export function SpecialistAvatar({ role }: { role: string }) {
-  const seeds: Record<string, string> = {
-    "Researcher": "Felix",
-    "Builder": "Sarah",
-    "Troubleshooter": "Alex",
-    "Deployer": "Jack",
-    "Assistant": "Sam",
-  };
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
 
-  const seed = seeds[role] || role;
+type SpecialistAvatarProps = {
+  name: string
+  isWorking?: boolean
+  className?: string
+}
+
+const specialistEmoji: Record<string, string> = {
+  Researcher: "🔍",
+  Builder: "🔨",
+  Writer: "✍️",
+  Troubleshooter: "🔧",
+  Deployer: "🚀",
+  Analyst: "📊",
+  Assistant: "🤖",
+}
+
+export function SpecialistAvatar({ name, isWorking = false, className }: SpecialistAvatarProps) {
+  const emoji = specialistEmoji[name] ?? specialistEmoji.Assistant
 
   return (
-    <Avatar className="w-12 h-12 border border-neutral-200 dark:border-neutral-800 shadow-inner">
-      <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${seed}&backgroundColor=f1f5f9`} alt={role} />
-      <AvatarFallback className="bg-neutral-100 text-neutral-600 font-medium">
-        {role.substring(0, 2).toUpperCase()}
-      </AvatarFallback>
-    </Avatar>
-  );
+    <div className={cn("inline-flex flex-col items-center gap-1.5", className)}>
+      <div className="relative">
+        {isWorking ? (
+          <motion.span
+            className="absolute -inset-1 rounded-full border-2 border-blue-400/70"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2.4, ease: "linear", repeat: Number.POSITIVE_INFINITY }}
+          />
+        ) : null}
+
+        <Avatar className="size-10 border border-zinc-200 bg-white shadow-sm">
+          <AvatarFallback className="bg-zinc-100 text-base">{emoji}</AvatarFallback>
+        </Avatar>
+
+        {!isWorking ? (
+          <span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full border border-white bg-emerald-500 text-white">
+            <Check className="size-2.5" />
+          </span>
+        ) : null}
+      </div>
+
+      <p className="max-w-[90px] text-center text-[11px] text-zinc-500">{name}</p>
+    </div>
+  )
 }
+
+export default SpecialistAvatar
