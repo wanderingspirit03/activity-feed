@@ -58,21 +58,34 @@ export function ActivityCard({ activity, isLatest }: { activity: ActivityItem; i
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <h4 className={cn(
-              "font-medium text-sm leading-none m-0",
-              activity.isActive ? "text-neutral-900 dark:text-white" : "text-neutral-600 dark:text-neutral-400",
-              activity.phase === "error" && "text-red-700 dark:text-red-300"
-            )}>
-              {activity.title}
-            </h4>
+            <div className="flex items-center gap-2 min-w-0">
+              <h4 className={cn(
+                "font-medium text-sm leading-none m-0",
+                activity.isActive ? "text-neutral-900 dark:text-white" : "text-neutral-600 dark:text-neutral-400",
+                activity.phase === "error" && "text-red-700 dark:text-red-300"
+              )}>
+                {activity.title}
+              </h4>
+              {activity.toolName && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 whitespace-nowrap">
+                  {activity.toolName}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-neutral-400 tabular-nums shrink-0 ml-4">
               {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
             </span>
           </div>
 
-          {activity.description && (
+          {activity.description && activity.description !== activity.title && (
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2 leading-snug">
               {activity.description}
+            </p>
+          )}
+
+          {activity.toolArgs && (
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1 line-clamp-1 font-mono leading-snug">
+              {typeof activity.toolArgs === 'string' ? activity.toolArgs : JSON.stringify(activity.toolArgs).slice(0, 120)}
             </p>
           )}
 

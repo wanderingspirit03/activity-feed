@@ -74,14 +74,14 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 		>
 			<div className="flex items-center gap-2 min-w-0">
 				<EventIcon kind={item.eventKind} className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
-				<span className="font-mono text-sm text-neutral-300 shrink-0">
-					{item.title || item.toolName || "tool"}
-				</span>
-				{!expanded && item.toolArgs && item.toolArgs !== item.title && (
-					<span className="text-xs text-neutral-500 truncate min-w-0">
-						{item.toolArgs.slice(0, 80)}
+				{item.toolName && (
+					<span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700 whitespace-nowrap shrink-0">
+						{item.toolName}
 					</span>
 				)}
+				<span className="font-mono text-sm text-neutral-400 shrink-0 truncate">
+					{item.toolName ? (item.toolArgs ? item.toolArgs.slice(0, 60) : item.title) : (item.title || "tool")}
+				</span>
 				<span className="ml-auto shrink-0 flex items-center gap-2">
 					{duration && (
 						<span className="text-xs text-neutral-500">{duration}</span>
