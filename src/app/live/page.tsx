@@ -5,6 +5,7 @@ import {
 	Activity,
 	AlertTriangle,
 	Brain,
+	ChevronDown,
 	Clock3,
 	MessageCircle,
 	Play,
@@ -61,30 +62,35 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 	const duration = item.completedAt
 		? formatDuration(item.completedAt - item.startedAt)
 		: null;
+	const hasDetails = !!(item.toolArgs || item.result);
 
 	return (
 		<button
 			type="button"
-			onClick={() => setExpanded(!expanded)}
-			className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
+			onClick={() => hasDetails && setExpanded(!expanded)}
+			className={`w-full text-left rounded-lg border px-2.5 py-2 sm:px-3 transition-colors ${
 				isLatest && isRunning
 					? "border-blue-500/50 bg-blue-500/5"
 					: "border-neutral-800 bg-neutral-900/50 hover:bg-neutral-900"
-			}`}
+			} ${hasDetails ? "cursor-pointer" : "cursor-default"}`}
 		>
-			<div className="flex items-center gap-2 min-w-0">
+			{/* Collapsed row — always visible */}
+			<div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
 				<EventIcon kind={item.eventKind} className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
 				{item.toolName && (
 					<span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700 whitespace-nowrap shrink-0">
 						{item.toolName}
 					</span>
 				)}
-				<span className="font-mono text-sm text-neutral-400 shrink-0 truncate">
-					{item.toolName ? (item.toolArgs ? item.toolArgs.slice(0, 60) : item.title) : (item.title || "tool")}
+				<span className="font-mono text-xs sm:text-sm text-neutral-400 truncate min-w-0 flex-1">
+					{item.title || "tool call"}
 				</span>
-				<span className="ml-auto shrink-0 flex items-center gap-2">
+				<span className="shrink-0 flex items-center gap-1.5 sm:gap-2">
 					{duration && (
-						<span className="text-xs text-neutral-500">{duration}</span>
+						<span className="text-[10px] sm:text-xs text-neutral-500 tabular-nums">{duration}</span>
+					)}
+					{hasDetails && (
+						<ChevronDown className={`h-3 w-3 text-neutral-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
 					)}
 					{isRunning ? (
 						<span className="relative flex h-2 w-2">
@@ -92,25 +98,30 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 							<span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
 						</span>
 					) : item.status === "error" ? (
-						<Badge variant="destructive" className="text-[10px] px-1.5 py-0">error</Badge>
+						<Badge variant="destructive" className="text-[10px] px-1.5 py-0">err</Badge>
 					) : (
-						<span className="h-2 w-2 rounded-full bg-emerald-500" />
+						<span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
 					)}
 				</span>
 			</div>
 
-			{expanded && item.toolArgs && (
-				<div className="mt-2 rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
-					<pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap break-all">
-						{item.toolArgs}
-					</pre>
-				</div>
-			)}
-			{expanded && item.result && (
-				<div className="mt-1 rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
-					<pre className="text-xs font-mono text-emerald-400/70 whitespace-pre-wrap break-all">
-						{item.result.slice(0, 2000)}
-					</pre>
+			{/* Expanded details — only on click */}
+			{expanded && (
+				<div className="mt-2 space-y-1.5">
+					{item.toolArgs && (
+						<div className="rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
+							<pre className="text-[10px] sm:text-xs font-mono text-neutral-400 whitespace-pre-wrap break-all">
+								{item.toolArgs}
+							</pre>
+						</div>
+					)}
+					{item.result && (
+						<div className="rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
+							<pre className="text-[10px] sm:text-xs font-mono text-emerald-400/70 whitespace-pre-wrap break-all">
+								{item.result.slice(0, 2000)}
+							</pre>
+						</div>
+					)}
 				</div>
 			)}
 		</button>
@@ -123,13 +134,13 @@ function RunSection({ run }: { run: RunData }) {
 
 	return (
 		<Card className="border-neutral-800 bg-neutral-950">
-			<CardHeader className="pb-3 border-b border-neutral-800">
+			<CardHeader className="px-3 sm:px-6 pb-3 border-b border-neutral-800">
 				<div className="flex items-start justify-between gap-2 min-w-0">
 					<div className="min-w-0 flex-1">
-						<CardTitle className="text-base font-medium truncate">
+						<CardTitle className="text-sm sm:text-base font-medium truncate">
 							{run.taskPreview || run.runId}
 						</CardTitle>
-						<div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-neutral-500">
+						<div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 text-[10px] sm:text-xs text-neutral-500">
 							<span>{formatTime(run.startedAt)}</span>
 							<span>·</span>
 							<span>{elapsed(run.startedAt)}</span>
@@ -139,17 +150,17 @@ function RunSection({ run }: { run: RunData }) {
 					</div>
 					<Badge
 						variant={isActive ? "default" : "secondary"}
-						className={`shrink-0 ${isActive ? "bg-blue-600" : ""}`}
+						className={`shrink-0 text-[10px] sm:text-xs ${isActive ? "bg-blue-600" : ""}`}
 					>
 						{run.status || "unknown"}
 					</Badge>
 				</div>
 			</CardHeader>
-			<CardContent className="pt-3 space-y-1.5">
+			<CardContent className="px-3 sm:px-6 pt-3 space-y-1.5">
 				{tools.length === 0 ? (
-					<p className="text-sm text-neutral-500 italic">Waiting for tool calls...</p>
+					<p className="text-xs sm:text-sm text-neutral-500 italic">Waiting for tool calls...</p>
 				) : (
-					tools.slice(-20).map((item, i, sliced) => (
+					tools.slice(-30).map((item, i, sliced) => (
 						<ToolCard
 							key={item.id || `${run.runId}-${i}`}
 							item={item}
@@ -170,7 +181,6 @@ export default function LivePage() {
 	const [displayRuns, setDisplayRuns] = useState(() => new Map(runs));
 	const lastRunsRef = useRef(runs);
 
-	// Force re-render every 5s for elapsed times
 	const [, setTick] = useState(0);
 	useEffect(() => {
 		const iv = setInterval(() => setTick((t) => t + 1), 5000);
@@ -199,53 +209,27 @@ export default function LivePage() {
 
 	const activeRuns = runArray.filter((r) => activeStatuses.has(r.status));
 	const recentRuns = runArray.filter((r) => !activeStatuses.has(r.status));
-	const activePhaseCounts = useMemo(() => {
-		const counts = new Map<string, number>();
-		for (const run of runArray) {
-			const phase = (run.currentPhase || run.status || "unknown").toLowerCase();
-			if (!activeStatuses.has(phase)) continue;
-			counts.set(phase, (counts.get(phase) ?? 0) + 1);
-		}
-		return Array.from(counts.entries());
-	}, [runArray]);
-	const activePhaseCount = activePhaseCounts.reduce((sum, [, count]) => sum + count, 0);
 
 	return (
-		<div className="space-y-6 px-4 md:px-8 py-6 max-w-4xl">
+		<div className="space-y-4 sm:space-y-6 px-3 sm:px-4 md:px-8 py-4 sm:py-6 max-w-4xl mx-auto">
 			{/* Header */}
-			<div className="flex items-center justify-between gap-4">
+			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 				<div>
-					<h1 className="text-2xl md:text-3xl font-bold">Live</h1>
-					<p className="text-sm text-neutral-500 mt-1">
-						Real-time assistant activity stream.
+					<h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Live</h1>
+					<p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">
+						Real-time activity stream
 					</p>
-					<div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
-						<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1">
-							{activeRuns.length} active runs
-						</span>
-						<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1">
-							{activePhaseCount} active phases
-						</span>
-						{activePhaseCounts.map(([phase, count]) => (
-							<span
-								key={phase}
-								className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1 capitalize"
-							>
-								{phase}: {count}
-							</span>
-						))}
-					</div>
 				</div>
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-2 self-start">
 					{isConnected ? (
 						<>
-							<Wifi className="h-4 w-4 text-emerald-500" />
-							<span className="text-xs text-emerald-500">Connected</span>
+							<Wifi className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500" />
+							<span className="text-[10px] sm:text-xs text-emerald-500">Connected</span>
 						</>
 					) : (
 						<>
-							<WifiOff className="h-4 w-4 text-red-400" />
-							<span className="text-xs text-red-400">Disconnected</span>
+							<WifiOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-400" />
+							<span className="text-[10px] sm:text-xs text-red-400">Disconnected</span>
 						</>
 					)}
 					<button
@@ -253,22 +237,32 @@ export default function LivePage() {
 							setPaused(!paused);
 							if (paused) setBufferedCount(0);
 						}}
-						className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+						className={`px-2 py-1 sm:px-2.5 rounded text-[10px] sm:text-xs font-medium transition-colors ${
 							paused
 								? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
 								: "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
 						}`}
 					>
-						{paused ? `▶ Resume (${bufferedCount} new)` : "⏸ Pause"}
+						{paused ? `▶ Resume (${bufferedCount})` : "⏸ Pause"}
 					</button>
 				</div>
 			</div>
 
+			{/* Stats bar */}
+			<div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-neutral-400">
+				<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-0.5 sm:py-1">
+					{activeRuns.length} active
+				</span>
+				<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-0.5 sm:py-1">
+					{runArray.length} total
+				</span>
+			</div>
+
 			{/* Active runs */}
 			{activeRuns.length > 0 && (
-				<div className="space-y-4">
-					<h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
-						<Activity className="h-4 w-4" /> Active ({activeRuns.length})
+				<div className="space-y-3 sm:space-y-4">
+					<h2 className="text-xs sm:text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+						<Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Active ({activeRuns.length})
 					</h2>
 					{activeRuns.map((run) => (
 						<RunSection key={run.runId} run={run} />
@@ -278,9 +272,9 @@ export default function LivePage() {
 
 			{/* Recent runs */}
 			{recentRuns.length > 0 && (
-				<div className="space-y-4">
-					<h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
-						<Clock3 className="h-4 w-4" /> Recent
+				<div className="space-y-3 sm:space-y-4">
+					<h2 className="text-xs sm:text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+						<Clock3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Recent
 					</h2>
 					{recentRuns.slice(0, 10).map((run) => (
 						<RunSection key={run.runId} run={run} />
@@ -291,11 +285,11 @@ export default function LivePage() {
 			{/* Empty state */}
 			{runArray.length === 0 && (
 				<Card className="border-neutral-800 bg-neutral-950">
-					<CardContent className="py-16 text-center">
-						<Activity className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-						<p className="text-neutral-500">No active runs.</p>
-						<p className="text-xs text-neutral-600 mt-1">
-							Activity will appear here when tasks start.
+					<CardContent className="py-12 sm:py-16 text-center">
+						<Activity className="h-8 w-8 sm:h-10 sm:w-10 text-neutral-600 mx-auto mb-3" />
+						<p className="text-sm text-neutral-500">No active runs</p>
+						<p className="text-[10px] sm:text-xs text-neutral-600 mt-1">
+							Activity will appear here when tasks start
 						</p>
 					</CardContent>
 				</Card>
