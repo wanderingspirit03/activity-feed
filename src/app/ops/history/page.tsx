@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-
-import { useOps } from "@/hooks/use-api";
-import { formatDuration, formatTimestamp } from "@/lib/format";
+import { OpAnalytics } from "@/components/ops/OpAnalytics";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { OpAnalytics } from "@/components/ops/OpAnalytics";
+import { useOps } from "@/hooks/use-api";
+import { formatDuration, formatTimestamp } from "@/lib/format";
 
 type OpFeature = {
 	status?: string;
@@ -74,9 +73,7 @@ export default function OpsHistoryPage() {
 		<main className="mx-auto max-w-6xl space-y-6 px-3 py-4 sm:px-4 md:px-8 sm:py-6 pb-24 md:pb-6">
 			<section className="space-y-1">
 				<h1 className="text-2xl font-semibold md:text-3xl">Operation History</h1>
-				<p className="text-sm text-muted-foreground">
-					Recent operations with status, progress, and timing.
-				</p>
+				<p className="text-sm text-muted-foreground">Recent operations with status, progress, and timing.</p>
 			</section>
 
 			<OpAnalytics ops={ops as any} />
@@ -100,9 +97,7 @@ export default function OpsHistoryPage() {
 				</Card>
 			) : ops.length === 0 ? (
 				<Card className="bg-card">
-					<CardContent className="py-10 text-center text-sm text-muted-foreground">
-						No operations found.
-					</CardContent>
+					<CardContent className="py-10 text-center text-sm text-muted-foreground">No operations found.</CardContent>
 				</Card>
 			) : (
 				<div className="grid grid-cols-1 gap-4">
@@ -110,9 +105,7 @@ export default function OpsHistoryPage() {
 						const status = String(op.status ?? "planning").toLowerCase();
 						const startedMs = toMs(op.startedAt ?? op.started_at);
 						const completedMs = toMs(op.completedAt ?? op.completed_at);
-						const durationMs = startedMs > 0
-							? Math.max(0, (completedMs || Date.now()) - startedMs)
-							: 0;
+						const durationMs = startedMs > 0 ? Math.max(0, (completedMs || Date.now()) - startedMs) : 0;
 
 						const features = Array.isArray(op.features) ? op.features : [];
 						const doneCount = features.filter((feature) => {
@@ -137,23 +130,23 @@ export default function OpsHistoryPage() {
 										<div className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
 											<div>
 												<p className="uppercase tracking-wide">Features</p>
-												<p className="mt-1 font-mono text-foreground">{doneCount}/{features.length}</p>
+												<p className="mt-1 font-mono text-foreground">
+													{doneCount}/{features.length}
+												</p>
 											</div>
 											<div>
 												<p className="uppercase tracking-wide">Duration</p>
-												<p className="mt-1 font-mono text-foreground">{durationMs > 0 ? formatDuration(durationMs) : "—"}</p>
+												<p className="mt-1 font-mono text-foreground">
+													{durationMs > 0 ? formatDuration(durationMs) : "—"}
+												</p>
 											</div>
 											<div>
 												<p className="uppercase tracking-wide">Started</p>
-												<p className="mt-1 text-foreground">
-													{startedMs > 0 ? formatTimestamp(startedMs) : "—"}
-												</p>
+												<p className="mt-1 text-foreground">{startedMs > 0 ? formatTimestamp(startedMs) : "—"}</p>
 											</div>
 											<div>
 												<p className="uppercase tracking-wide">Updated</p>
-												<p className="mt-1 text-foreground">
-													{formatTimestamp(toMs(op.updatedAt ?? op.updated_at))}
-												</p>
+												<p className="mt-1 text-foreground">{formatTimestamp(toMs(op.updatedAt ?? op.updated_at))}</p>
 											</div>
 										</div>
 									</CardHeader>

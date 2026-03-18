@@ -147,15 +147,11 @@ export async function getScores(): Promise<ScoresPayload> {
 	if (redisEntries && redisEntries.length > 0) {
 		entries = redisEntries;
 	} else {
-		const scoresData = await readJsonSafe<{ entries: ScoreEntry[] }>(
-			path.join(SCORES_DIR, "task-scores.json"),
-		);
+		const scoresData = await readJsonSafe<{ entries: ScoreEntry[] }>(path.join(SCORES_DIR, "task-scores.json"));
 		entries = scoresData?.entries ?? [];
 	}
 
-	const impactData = await readJsonSafe<ImprovementImpact>(
-		path.join(SCORES_DIR, "improvement-impact.json"),
-	);
+	const impactData = await readJsonSafe<ImprovementImpact>(path.join(SCORES_DIR, "improvement-impact.json"));
 
 	const scored = entries.filter((e) => e.scores);
 
@@ -186,9 +182,7 @@ export async function getScores(): Promise<ScoresPayload> {
 		.sort((a, b) => a.date.localeCompare(b.date));
 
 	// Worst tasks
-	const worstTasks = [...scored]
-		.sort((a, b) => a.scores.quality - b.scores.quality)
-		.slice(0, 10);
+	const worstTasks = [...scored].sort((a, b) => a.scores.quality - b.scores.quality).slice(0, 10);
 
 	return {
 		entries: scored,

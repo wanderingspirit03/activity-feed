@@ -35,10 +35,7 @@ function normalizeOpData(input: unknown): OpsData | null {
 					type: String(event.type ?? ""),
 					title: String(event.title ?? ""),
 					featureId: typeof event.featureId === "string" ? event.featureId : undefined,
-					status:
-						typeof event.status === "string"
-							? (event.status as OpsData["events"][number]["status"])
-							: undefined,
+					status: typeof event.status === "string" ? (event.status as OpsData["events"][number]["status"]) : undefined,
 					verdict: typeof event.verdict === "string" ? event.verdict : undefined,
 				}))
 		: [];
@@ -83,10 +80,7 @@ export async function GET() {
 
 		return NextResponse.json({ ops });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: "Failed to load ops data", detail: String(error) },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to load ops data", detail: String(error) }, { status: 500 });
 	}
 }
 

@@ -69,7 +69,9 @@ export function DependencyGraph({ features }: DependencyGraphProps) {
 	if (!features.length) {
 		return (
 			<div className="w-full overflow-x-auto rounded-lg border border-border/60 bg-card/30 p-6">
-				<div className="text-sm text-muted-foreground">No features yet. Dependency graph will appear once phases are populated.</div>
+				<div className="text-sm text-muted-foreground">
+					No features yet. Dependency graph will appear once phases are populated.
+				</div>
 			</div>
 		);
 	}
@@ -136,18 +138,13 @@ export function DependencyGraph({ features }: DependencyGraphProps) {
 		const pairSet = new Set<string>();
 
 		for (let i = 0; i < current.length; i++) {
-			const targetIndex =
-				next.length === 1
-					? 0
-					: Math.round((i / Math.max(1, current.length - 1)) * (next.length - 1));
+			const targetIndex = next.length === 1 ? 0 : Math.round((i / Math.max(1, current.length - 1)) * (next.length - 1));
 			pairSet.add(`${i}-${targetIndex}`);
 		}
 
 		for (let j = 0; j < next.length; j++) {
 			const sourceIndex =
-				current.length === 1
-					? 0
-					: Math.round((j / Math.max(1, next.length - 1)) * (current.length - 1));
+				current.length === 1 ? 0 : Math.round((j / Math.max(1, next.length - 1)) * (current.length - 1));
 			pairSet.add(`${sourceIndex}-${j}`);
 		}
 

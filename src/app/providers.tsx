@@ -22,9 +22,12 @@ export function Providers({ children }: { children: ReactNode }) {
 					if (error?.name === "AbortError") return;
 					if (retryCount >= 3) return;
 
-					setTimeout(() => {
-						void revalidate({ retryCount });
-					}, Math.min(1_000 * 2 ** retryCount, 10_000));
+					setTimeout(
+						() => {
+							void revalidate({ retryCount });
+						},
+						Math.min(1_000 * 2 ** retryCount, 10_000),
+					);
 				},
 			}}
 		>

@@ -79,9 +79,7 @@ export function OpAnalytics({ ops }: OpAnalyticsProps) {
 			title: "Avg Duration",
 			value: avgDurationText,
 			subtitle:
-				completedDurations.length > 0
-					? `From ${completedDurations.length} completed ops`
-					: "No completed ops yet",
+				completedDurations.length > 0 ? `From ${completedDurations.length} completed ops` : "No completed ops yet",
 			icon: Timer,
 			cardTone:
 				completedDurations.length === 0

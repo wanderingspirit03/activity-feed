@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Check, Loader2, Pause, Play, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { type OpsData, useOpsStore } from "@/stores/ops-store";
@@ -36,11 +36,9 @@ const ACTIONS_BY_STATUS: Record<string, ActionButton[]> = {
 };
 
 const TONE_STYLES: Record<Tone, string> = {
-	emerald:
-		"border-emerald-500/60 text-emerald-300 hover:bg-emerald-500/10 focus-visible:ring-emerald-400/60",
+	emerald: "border-emerald-500/60 text-emerald-300 hover:bg-emerald-500/10 focus-visible:ring-emerald-400/60",
 	blue: "border-blue-500/60 text-blue-300 hover:bg-blue-500/10 focus-visible:ring-blue-400/60",
-	amber:
-		"border-amber-500/60 text-amber-300 hover:bg-amber-500/10 focus-visible:ring-amber-400/60",
+	amber: "border-amber-500/60 text-amber-300 hover:bg-amber-500/10 focus-visible:ring-amber-400/60",
 	red: "border-red-500/60 text-red-300 hover:bg-red-500/10 focus-visible:ring-red-400/60",
 };
 
@@ -142,11 +140,7 @@ export default function OpActions({ opId, status, onAction }: OpActionsProps) {
 							TONE_STYLES[button.tone],
 						)}
 					>
-						{isLoading ? (
-							<Loader2 className="size-3.5 animate-spin" />
-						) : (
-							<Icon className="size-3.5" />
-						)}
+						{isLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
 						<span>{button.label}</span>
 					</button>
 				);

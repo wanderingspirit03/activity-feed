@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath, parse } from "node:url";
-import next from "next";
 import Redis from "ioredis";
+import next from "next";
 import { WebSocket, WebSocketServer } from "ws";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -212,7 +212,13 @@ function getSpecialistName(task: string): string {
 }
 
 function parseOpsFeatureStatus(value: unknown): OpsFeatureStatus {
-	if (value === "pending" || value === "in-progress" || value === "done" || value === "failed" || value === "fix-needed") {
+	if (
+		value === "pending" ||
+		value === "in-progress" ||
+		value === "done" ||
+		value === "failed" ||
+		value === "fix-needed"
+	) {
 		return value;
 	}
 	if (value === "completed") return "done";
@@ -323,11 +329,7 @@ function resolveFeatureIdForToolEvent(raw: Record<string, string>, parsedData: R
 	if (featureId) return featureId;
 
 	const runId =
-		typeof parsedData.runId === "string"
-			? parsedData.runId
-			: typeof raw.runId === "string"
-				? raw.runId
-				: null;
+		typeof parsedData.runId === "string" ? parsedData.runId : typeof raw.runId === "string" ? raw.runId : null;
 	if (!runId) return null;
 
 	return workerRunToFeature.get(runId) ?? null;
@@ -357,7 +359,13 @@ function upsertFeatureToolActivity(featureId: string, activity: ToolActivity) {
 	broadcast({ type: "ops.update", data: found.op });
 }
 
-function applyOpsEvent(type: string, opId: string, payload: Record<string, any>, streamId: string, ts: number): OpsData {
+function applyOpsEvent(
+	type: string,
+	opId: string,
+	payload: Record<string, any>,
+	streamId: string,
+	ts: number,
+): OpsData {
 	const op = ensureOpState(opId, payload.title, ts);
 	op.updatedAt = Math.max(op.updatedAt, ts);
 
@@ -365,12 +373,19 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 		case "ops.started": {
 			op.title = payload.title || op.title;
 			op.status = "running";
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: payload.title || op.title,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: payload.title || op.title,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 		case "ops.feature.dispatched": {
@@ -390,13 +405,20 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 				attempts: Math.max(Number(existing?.attempts || 0), 1),
 				toolActivity: featureToolActivity.get(featureId) ?? existing?.toolActivity ?? [],
 			});
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: String(payload.title || existing?.title || featureId),
-				featureId,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: String(payload.title || existing?.title || featureId),
+						featureId,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 		case "ops.feature.completed": {
@@ -412,14 +434,21 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 				attempts: Number(existing?.attempts || 0),
 				toolActivity: featureToolActivity.get(featureId) ?? existing?.toolActivity ?? [],
 			});
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: String(payload.title || existing?.title || featureId),
-				featureId,
-				status,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: String(payload.title || existing?.title || featureId),
+						featureId,
+						status,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 		case "ops.phase.advanced": {
@@ -427,35 +456,56 @@ function applyOpsEvent(type: string, opId: string, payload: Record<string, any>,
 			const totalPhases = Number(payload.totalPhases) || op.totalPhases;
 			op.currentPhase = Math.max(1, toPhase);
 			op.totalPhases = Math.max(op.currentPhase, totalPhases || op.totalPhases || 1);
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: `Step ${op.currentPhase}`,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: `Step ${op.currentPhase}`,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 		case "ops.completed": {
 			op.status = String(payload.status || op.status || "completed");
 			op.title = payload.title || op.title;
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: payload.title || op.title,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: payload.title || op.title,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 		case "ops.review": {
 			const featureId = payload.featureId ? String(payload.featureId) : undefined;
-			appendOpsEvent(op, normalizeOpsEvent({
-				id: streamId,
-				timestamp: ts,
-				type,
-				title: String(payload.title || featureId || op.title),
-				featureId,
-				verdict: typeof payload.verdict === "string" ? payload.verdict : undefined,
-			}, streamId, type));
+			appendOpsEvent(
+				op,
+				normalizeOpsEvent(
+					{
+						id: streamId,
+						timestamp: ts,
+						type,
+						title: String(payload.title || featureId || op.title),
+						featureId,
+						verdict: typeof payload.verdict === "string" ? payload.verdict : undefined,
+					},
+					streamId,
+					type,
+				),
+			);
 			break;
 		}
 	}
@@ -480,16 +530,17 @@ function normalizeOpsSnapshot(snapshot: any): OpsData | null {
 
 	const now = Date.now();
 	const features: OpsFeature[] = Array.isArray(snapshot.features)
-		? snapshot.features.map((feature: any) => ({
-				id: String(feature?.id || ""),
-				title: String(feature?.title || feature?.id || "Feature"),
-				status: parseOpsFeatureStatus(feature?.status),
-				phase: Math.max(1, Number(feature?.phase) || 1),
-				assignedModel: String(feature?.assignedModel || "worker"),
-				attempts: Math.max(0, Number(feature?.attempts) || 0),
-				toolActivity: featureToolActivity.get(String(feature?.id || "")) ?? [],
-			}))
-			.filter((feature: OpsFeature) => feature.id)
+		? snapshot.features
+				.map((feature: any) => ({
+					id: String(feature?.id || ""),
+					title: String(feature?.title || feature?.id || "Feature"),
+					status: parseOpsFeatureStatus(feature?.status),
+					phase: Math.max(1, Number(feature?.phase) || 1),
+					assignedModel: String(feature?.assignedModel || "worker"),
+					attempts: Math.max(0, Number(feature?.attempts) || 0),
+					toolActivity: featureToolActivity.get(String(feature?.id || "")) ?? [],
+				}))
+				.filter((feature: OpsFeature) => feature.id)
 		: [];
 
 	return {
@@ -585,9 +636,22 @@ function translateEvent(raw: Record<string, string>, streamId: string): Activity
 		case "run.start":
 			return { ...base, phase: "queued", title: "Starting to work on your request…", icon: "rocket", progress: 5 };
 		case "llm.start":
-			return { ...base, phase: "understanding", title: "Thinking about your request…", icon: "brain", progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				phase: "understanding",
+				title: "Thinking about your request…",
+				icon: "brain",
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "llm.done":
-			return { ...base, phase: "working", title: "Figured out the next step…", icon: "lightbulb", isActive: false, progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				phase: "working",
+				title: "Figured out the next step…",
+				icon: "lightbulb",
+				isActive: false,
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "tool.start": {
 			const toolName = raw.toolName || raw["data.toolName"] || "";
 			const toolArgs = raw.toolArgs || "";
@@ -618,17 +682,48 @@ function translateEvent(raw: Record<string, string>, streamId: string): Activity
 			};
 		}
 		case "tool.error":
-			return { ...base, title: "Hit a small bump — working around it…", icon: "alert-triangle", isActive: false, progress: currentProgress };
+			return {
+				...base,
+				title: "Hit a small bump — working around it…",
+				icon: "alert-triangle",
+				isActive: false,
+				progress: currentProgress,
+			};
 		case "subagent.spawn":
-			return { ...base, title: "A specialist is helping out…", icon: "users", progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				title: "A specialist is helping out…",
+				icon: "users",
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "subagent.done":
-			return { ...base, title: "Specialist finished their part ✓", icon: "user-check", isActive: false, progress: Math.min(currentProgress + 10, 95) };
+			return {
+				...base,
+				title: "Specialist finished their part ✓",
+				icon: "user-check",
+				isActive: false,
+				progress: Math.min(currentProgress + 10, 95),
+			};
 		case "run.done": {
 			const status = raw.status || raw["data.status"] || "ok";
 			if (status === "ok" || status === "done") {
-				return { ...base, phase: "complete", title: "All done! ✓", icon: "check-circle", isActive: false, progress: 100 };
+				return {
+					...base,
+					phase: "complete",
+					title: "All done! ✓",
+					icon: "check-circle",
+					isActive: false,
+					progress: 100,
+				};
 			}
-			return { ...base, phase: "error", title: "Something went wrong — we're on it", icon: "alert-triangle", isActive: false, progress: currentProgress };
+			return {
+				...base,
+				phase: "error",
+				title: "Something went wrong — we're on it",
+				icon: "alert-triangle",
+				isActive: false,
+				progress: currentProgress,
+			};
 		}
 		default:
 			return null;
@@ -740,7 +835,8 @@ function processEvent(fields: string[], streamId: string) {
 	// Handle run.start — create the run idempotently
 	if (type === "run.start") {
 		if (!runs.has(runId)) {
-			const task = raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
+			const task =
+				raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
 			const newRun: RunOverview = {
 				runId,
 				task,

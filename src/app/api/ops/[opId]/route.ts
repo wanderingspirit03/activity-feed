@@ -35,10 +35,7 @@ function normalizeOpData(input: unknown): OpsData | null {
 					type: String(event.type ?? ""),
 					title: String(event.title ?? ""),
 					featureId: typeof event.featureId === "string" ? event.featureId : undefined,
-					status:
-						typeof event.status === "string"
-							? (event.status as OpsData["events"][number]["status"])
-							: undefined,
+					status: typeof event.status === "string" ? (event.status as OpsData["events"][number]["status"]) : undefined,
 					verdict: typeof event.verdict === "string" ? event.verdict : undefined,
 				}))
 		: [];
@@ -56,10 +53,7 @@ function normalizeOpData(input: unknown): OpsData | null {
 	};
 }
 
-export async function GET(
-	_request: Request,
-	context: { params: Promise<{ opId: string }> },
-) {
+export async function GET(_request: Request, context: { params: Promise<{ opId: string }> }) {
 	try {
 		const { opId } = await context.params;
 		const redis = getRedis();
@@ -77,9 +71,6 @@ export async function GET(
 
 		return NextResponse.json({ op });
 	} catch (error) {
-		return NextResponse.json(
-			{ error: "Failed to load op data", detail: String(error) },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to load op data", detail: String(error) }, { status: 500 });
 	}
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -89,11 +89,7 @@ export default function NewOpDialog({ open, onClose, onSuccess }: NewOpDialogPro
 	};
 
 	return (
-		<div
-			className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
-			onClick={handleClose}
-			role="presentation"
-		>
+		<div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={handleClose} role="presentation">
 			<div className="flex h-full w-full items-end sm:items-center sm:justify-center">
 				<div
 					role="dialog"
@@ -173,11 +169,7 @@ export default function NewOpDialog({ open, onClose, onSuccess }: NewOpDialogPro
 								disabled={isSubmitting || description.trim().length === 0}
 								className="inline-flex h-9 items-center gap-2 rounded-md border border-blue-500/70 bg-blue-500/20 px-3 text-sm font-medium text-blue-200 transition-colors hover:bg-blue-500/30 disabled:opacity-60"
 							>
-								{isSubmitting ? (
-									<Loader2 className="size-4 animate-spin" />
-								) : (
-									<Plus className="size-4" />
-								)}
+								{isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
 								<span>Create operation</span>
 							</button>
 						</div>

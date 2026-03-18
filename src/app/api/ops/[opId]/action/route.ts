@@ -8,10 +8,7 @@ const ALLOWED_ACTIONS = new Set(["approve", "pause", "resume", "cancel", "interv
 
 type OpsAction = "approve" | "pause" | "resume" | "cancel" | "intervene";
 
-export async function POST(
-	request: Request,
-	context: { params: Promise<{ opId: string }> },
-) {
+export async function POST(request: Request, context: { params: Promise<{ opId: string }> }) {
 	try {
 		const { opId } = await context.params;
 		const body = await request.json().catch(() => null);

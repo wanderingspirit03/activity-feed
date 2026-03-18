@@ -1,10 +1,4 @@
-export type RunPhase =
-	| "queued"
-	| "understanding"
-	| "working"
-	| "reviewing"
-	| "complete"
-	| "error";
+export type RunPhase = "queued" | "understanding" | "working" | "reviewing" | "complete" | "error";
 
 export type ActivityItem = {
 	id: string;

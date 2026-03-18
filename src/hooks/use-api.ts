@@ -10,11 +10,7 @@ export async function fetcher<T>(url: string): Promise<T> {
 	return (await response.json()) as T;
 }
 
-function useApi<T>(
-	url: string,
-	refreshInterval: number,
-	opts?: SWRConfiguration<T, Error>,
-) {
+function useApi<T>(url: string, refreshInterval: number, opts?: SWRConfiguration<T, Error>) {
 	const { data, error, isLoading, mutate } = useSWR<T, Error>(url, fetcher, {
 		refreshInterval,
 		revalidateOnFocus: false,

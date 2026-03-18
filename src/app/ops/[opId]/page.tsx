@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { formatDistanceToNow } from "date-fns";
 import {
 	AlertTriangle,
 	ArrowLeft,
@@ -15,19 +13,20 @@ import {
 	Sparkles,
 	XCircle,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-
-import FeatureCard from "@/components/ops/FeatureCard";
-import OpActions from "@/components/ops/OpActions";
-import InterventionPanel from "@/components/ops/InterventionPanel";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { DependencyGraph } from "@/components/ops/DependencyGraph";
-import { useOp } from "@/hooks/use-api";
+import FeatureCard from "@/components/ops/FeatureCard";
+import InterventionPanel from "@/components/ops/InterventionPanel";
+import OpActions from "@/components/ops/OpActions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useOp } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
-import { useOpsStore, type OpsData, type OpsEvent } from "@/stores/ops-store";
+import { type OpsData, type OpsEvent, useOpsStore } from "@/stores/ops-store";
 
 const opStatusConfig: Record<string, { label: string; className: string }> = {
 	running: {
@@ -80,7 +79,7 @@ function eventLabel(event: OpsEvent) {
 		case "ops.started":
 			return "Operation started";
 		case "ops.feature.dispatched":
-			return `Worker assigned to \"${event.title}\"`;
+			return `Worker assigned to "${event.title}"`;
 		case "ops.feature.completed":
 			return event.title;
 		case "ops.phase.advanced":
@@ -117,7 +116,15 @@ function formatElapsed(ms: number) {
 	return `${seconds}s`;
 }
 
-function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: number; totalPhases: number; status: string }) {
+function StepTracker({
+	currentPhase,
+	totalPhases,
+	status,
+}: {
+	currentPhase: number;
+	totalPhases: number;
+	status: string;
+}) {
 	const steps = Math.max(totalPhases, 1);
 	const activeStep = status === "completed" ? steps + 1 : Math.max(currentPhase, 1);
 
@@ -143,7 +150,9 @@ function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: numb
 							{isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : step}
 						</div>
 						{i < steps - 1 && (
-							<div className={cn("h-[2px] min-w-[12px] flex-1 rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")} />
+							<div
+								className={cn("h-[2px] min-w-[12px] flex-1 rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")}
+							/>
 						)}
 					</div>
 				);
@@ -219,9 +228,7 @@ export default function OpDetailPage() {
 	const totalCount = op?.features?.length ?? 0;
 	const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-	const elapsedMs = op
-		? (op.status === "completed" || op.status === "failed" ? op.updatedAt : now) - op.startedAt
-		: 0;
+	const elapsedMs = op ? (op.status === "completed" || op.status === "failed" ? op.updatedAt : now) - op.startedAt : 0;
 
 	const groupedFeatures = useMemo(() => {
 		if (!op) return [] as Array<{ phase: number; features: OpsData["features"] }>;
@@ -260,7 +267,10 @@ export default function OpDetailPage() {
 	if (!opId) {
 		return (
 			<div className="space-y-4 px-3 py-4 sm:px-4 md:px-8 sm:py-6">
-				<Link href="/ops" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+				<Link
+					href="/ops"
+					className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+				>
 					<ArrowLeft className="h-4 w-4" />
 					Back to operations
 				</Link>
@@ -277,7 +287,10 @@ export default function OpDetailPage() {
 	return (
 		<div className="space-y-4 bg-background px-3 py-4 pb-24 sm:space-y-6 sm:px-4 sm:py-6 md:px-8 md:pb-8">
 			<header className="space-y-3">
-				<Link href="/ops" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+				<Link
+					href="/ops"
+					className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+				>
 					<ArrowLeft className="h-4 w-4" />
 					Back to operations
 				</Link>
@@ -286,9 +299,7 @@ export default function OpDetailPage() {
 					<CardHeader className="px-4 pb-4 sm:px-6">
 						<div className="flex flex-wrap items-start justify-between gap-3">
 							<div className="min-w-0">
-								<CardTitle className="text-lg leading-tight sm:text-2xl">
-									{op?.title || "Loading operation…"}
-								</CardTitle>
+								<CardTitle className="text-lg leading-tight sm:text-2xl">{op?.title || "Loading operation…"}</CardTitle>
 								<CardDescription className="mt-1 break-all font-mono text-xs">{opId}</CardDescription>
 							</div>
 							<Badge variant="outline" className={cn("uppercase tracking-wide", statusBadge.className)}>
@@ -297,11 +308,7 @@ export default function OpDetailPage() {
 						</div>
 
 						<div className="mt-4 rounded-lg border border-border bg-card/50 p-3">
-							<StepTracker
-								currentPhase={op?.currentPhase ?? 0}
-								totalPhases={op?.totalPhases ?? 1}
-								status={status}
-							/>
+							<StepTracker currentPhase={op?.currentPhase ?? 0} totalPhases={op?.totalPhases ?? 1} status={status} />
 						</div>
 
 						<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -309,7 +316,9 @@ export default function OpDetailPage() {
 								<p className="text-[10px] uppercase tracking-wide text-muted-foreground">Progress</p>
 								<div className="mt-2 space-y-1.5">
 									<div className="flex items-center justify-between text-xs text-muted-foreground">
-										<span>{doneCount}/{totalCount} done</span>
+										<span>
+											{doneCount}/{totalCount} done
+										</span>
 										{failedCount > 0 && <span className="text-red-400">{failedCount} failed</span>}
 									</div>
 									<Progress value={progress} className="h-2" />
@@ -324,9 +333,7 @@ export default function OpDetailPage() {
 							<div className="rounded-md border border-border/60 bg-background/40 p-3">
 								<p className="text-[10px] uppercase tracking-wide text-muted-foreground">Updated</p>
 								<p className="mt-2 text-sm text-foreground">
-									{op?.updatedAt
-										? formatDistanceToNow(op.updatedAt, { addSuffix: true })
-										: "—"}
+									{op?.updatedAt ? formatDistanceToNow(op.updatedAt, { addSuffix: true }) : "—"}
 								</p>
 							</div>
 						</div>
@@ -371,7 +378,9 @@ export default function OpDetailPage() {
 										<Sparkles className="h-5 w-5 text-muted-foreground" />
 									</div>
 									<p className="text-sm text-foreground">No features yet</p>
-									<p className="mt-1 text-xs text-muted-foreground">This operation has not dispatched feature workers.</p>
+									<p className="mt-1 text-xs text-muted-foreground">
+										This operation has not dispatched feature workers.
+									</p>
 								</CardContent>
 							</Card>
 						) : (
@@ -425,28 +434,26 @@ export default function OpDetailPage() {
 						<EventTimeline events={op.events} />
 					</aside>
 
-				{/* Dependency Graph */}
-				{op.features.length > 0 && (
+					{/* Dependency Graph */}
+					{op.features.length > 0 && (
+						<div className="lg:col-span-3">
+							<Card>
+								<CardHeader className="px-4 pb-3 sm:px-6">
+									<CardTitle className="text-base">Feature Map</CardTitle>
+									<CardDescription className="text-xs">Features grouped by phase</CardDescription>
+								</CardHeader>
+								<CardContent className="px-4 sm:px-6">
+									<DependencyGraph features={op.features} />
+								</CardContent>
+							</Card>
+						</div>
+					)}
+
+					{/* Intervention Panel */}
 					<div className="lg:col-span-3">
-						<Card>
-							<CardHeader className="px-4 pb-3 sm:px-6">
-								<CardTitle className="text-base">Feature Map</CardTitle>
-								<CardDescription className="text-xs">Features grouped by phase</CardDescription>
-							</CardHeader>
-							<CardContent className="px-4 sm:px-6">
-								<DependencyGraph features={op.features} />
-							</CardContent>
-						</Card>
+						<InterventionPanel opId={opId as string} status={status} />
 					</div>
-				)}
-
-				{/* Intervention Panel */}
-				<div className="lg:col-span-3">
-					<InterventionPanel opId={opId as string} status={status} />
 				</div>
-				</div>
-
-				
 			)}
 		</div>
 	);

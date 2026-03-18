@@ -1,29 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
 import {
 	AlertTriangle,
 	CheckCircle2,
-	Clock,
 	ClipboardList,
+	Clock,
 	Loader2,
 	Plus,
 	Sparkles,
 	Wrench,
 	XCircle,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-
-import { useOps } from "@/hooks/use-api";
-import { useOpsStore, type OpsData, type OpsFeature, type OpsEvent, type OpsFeatureStatus } from "@/stores/ops-store";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import NewOpDialog from "@/components/ops/NewOpDialog";
+import OpActions from "@/components/ops/OpActions";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import OpActions from "@/components/ops/OpActions";
-import NewOpDialog from "@/components/ops/NewOpDialog";
+import { useOps } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { type OpsData, type OpsEvent, type OpsFeature, type OpsFeatureStatus, useOpsStore } from "@/stores/ops-store";
 
 /* ── Status helpers ────────────────────────────── */
 
@@ -40,7 +39,11 @@ const featureStatusConfig: Record<OpsFeatureStatus, { label: string; className: 
 	"in-progress": { label: "Working", className: "text-amber-400 border-amber-500/40 bg-amber-500/10", icon: Loader2 },
 	done: { label: "Done", className: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", icon: CheckCircle2 },
 	failed: { label: "Failed", className: "text-red-400 border-red-500/40 bg-red-500/10", icon: XCircle },
-	"fix-needed": { label: "Needs update", className: "text-orange-400 border-orange-500/40 bg-orange-500/10", icon: AlertTriangle },
+	"fix-needed": {
+		label: "Needs update",
+		className: "text-orange-400 border-orange-500/40 bg-orange-500/10",
+		icon: AlertTriangle,
+	},
 };
 
 type OpsApiResponse = {
@@ -49,25 +52,39 @@ type OpsApiResponse = {
 
 function eventEmoji(type: string, status?: string) {
 	switch (type) {
-		case "ops.started": return "🚀";
-		case "ops.feature.dispatched": return "👷";
-		case "ops.feature.completed": return status === "done" ? "✅" : status === "failed" ? "❌" : "⚠️";
-		case "ops.phase.advanced": return "📊";
-		case "ops.completed": return "🎉";
-		case "ops.review": return "🔍";
-		default: return "•";
+		case "ops.started":
+			return "🚀";
+		case "ops.feature.dispatched":
+			return "👷";
+		case "ops.feature.completed":
+			return status === "done" ? "✅" : status === "failed" ? "❌" : "⚠️";
+		case "ops.phase.advanced":
+			return "📊";
+		case "ops.completed":
+			return "🎉";
+		case "ops.review":
+			return "🔍";
+		default:
+			return "•";
 	}
 }
 
 function eventLabel(event: OpsEvent) {
 	switch (event.type) {
-		case "ops.started": return "Operation started";
-		case "ops.feature.dispatched": return `Worker assigned to "${event.title}"`;
-		case "ops.feature.completed": return event.title;
-		case "ops.phase.advanced": return event.title;
-		case "ops.completed": return "Operation complete!";
-		case "ops.review": return `Code review: ${event.verdict ?? event.title}`;
-		default: return event.title;
+		case "ops.started":
+			return "Operation started";
+		case "ops.feature.dispatched":
+			return `Worker assigned to "${event.title}"`;
+		case "ops.feature.completed":
+			return event.title;
+		case "ops.phase.advanced":
+			return event.title;
+		case "ops.completed":
+			return "Operation complete!";
+		case "ops.review":
+			return `Code review: ${event.verdict ?? event.title}`;
+		default:
+			return event.title;
 	}
 }
 
@@ -79,10 +96,21 @@ function FeatureCard({ feature }: { feature: OpsFeature }) {
 	const isWorking = feature.status === "in-progress";
 
 	return (
-		<div className={cn("rounded-lg border px-3 py-2.5 transition-colors", isWorking ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/50")}>
+		<div
+			className={cn(
+				"rounded-lg border px-3 py-2.5 transition-colors",
+				isWorking ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/50",
+			)}
+		>
 			<div className="flex items-start gap-3">
 				<div className="shrink-0 mt-0.5">
-					<Icon className={cn("h-4 w-4", config.className.split(" ").find(c => c.startsWith("text-")), isWorking && "animate-spin")} />
+					<Icon
+						className={cn(
+							"h-4 w-4",
+							config.className.split(" ").find((c) => c.startsWith("text-")),
+							isWorking && "animate-spin",
+						)}
+					/>
 				</div>
 				<div className="flex-1 min-w-0">
 					<div className="flex items-start justify-between gap-2">
@@ -94,7 +122,9 @@ function FeatureCard({ feature }: { feature: OpsFeature }) {
 					<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
 						<span className="text-[11px] text-muted-foreground">Step {feature.phase}</span>
 						<span className="text-[11px] text-muted-foreground hidden sm:inline">·</span>
-						<span className="text-[11px] text-muted-foreground truncate max-w-[180px] sm:max-w-none">{feature.assignedModel || "worker"}</span>
+						<span className="text-[11px] text-muted-foreground truncate max-w-[180px] sm:max-w-none">
+							{feature.assignedModel || "worker"}
+						</span>
 						{feature.attempts > 1 && (
 							<>
 								<span className="text-[11px] text-muted-foreground">·</span>
@@ -110,7 +140,15 @@ function FeatureCard({ feature }: { feature: OpsFeature }) {
 
 /* ── Step Tracker ──────────────────────────────── */
 
-function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: number; totalPhases: number; status: string }) {
+function StepTracker({
+	currentPhase,
+	totalPhases,
+	status,
+}: {
+	currentPhase: number;
+	totalPhases: number;
+	status: string;
+}) {
 	const steps = Math.max(totalPhases, 3);
 	const activeStep = status === "completed" ? steps + 1 : currentPhase;
 
@@ -122,16 +160,22 @@ function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: numb
 				const isDone = step < activeStep || status === "completed";
 				return (
 					<div key={step} className="flex items-center gap-1 flex-1 min-w-0">
-						<div className={cn(
-							"flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-medium shrink-0",
-							isDone ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400" :
-							isActive ? "border-blue-500/50 bg-blue-500/15 text-blue-400 animate-pulse" :
-							"border-border text-muted-foreground",
-						)}>
+						<div
+							className={cn(
+								"flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-medium shrink-0",
+								isDone
+									? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400"
+									: isActive
+										? "border-blue-500/50 bg-blue-500/15 text-blue-400 animate-pulse"
+										: "border-border text-muted-foreground",
+							)}
+						>
 							{isDone ? <CheckCircle2 className="h-3 w-3" /> : step}
 						</div>
 						{i < steps - 1 && (
-							<div className={cn("h-[2px] flex-1 min-w-[12px] rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")} />
+							<div
+								className={cn("h-[2px] flex-1 min-w-[12px] rounded-full", isDone ? "bg-emerald-500/40" : "bg-border")}
+							/>
 						)}
 					</div>
 				);
@@ -143,8 +187,8 @@ function StepTracker({ currentPhase, totalPhases, status }: { currentPhase: numb
 /* ── Op Card ───────────────────────────────────── */
 
 function OpCard({ op }: { op: OpsData }) {
-	const doneCount = op.features.filter(f => f.status === "done").length;
-	const failedCount = op.features.filter(f => f.status === "failed").length;
+	const doneCount = op.features.filter((f) => f.status === "done").length;
+	const failedCount = op.features.filter((f) => f.status === "failed").length;
 	const totalCount = op.features.length;
 	const progress = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 	const config = statusConfig[op.status] ?? statusConfig.planning;
@@ -189,7 +233,7 @@ function OpCard({ op }: { op: OpsData }) {
 				{op.features.length === 0 ? (
 					<p className="text-sm text-muted-foreground py-4 text-center">Workers are getting ready…</p>
 				) : (
-					op.features.map(feature => <FeatureCard key={feature.id} feature={feature} />)
+					op.features.map((feature) => <FeatureCard key={feature.id} feature={feature} />)
 				)}
 			</CardContent>
 		</Card>
@@ -212,8 +256,11 @@ function Timeline({ events }: { events: OpsEvent[] }) {
 						<p className="text-xs text-muted-foreground py-8 text-center">Waiting for updates…</p>
 					) : (
 						<div className="space-y-2 pr-3">
-							{sorted.map(event => (
-								<div key={event.id} className="flex items-start justify-between gap-2 rounded-md border border-border bg-card/50 px-2 sm:px-2.5 py-1.5 sm:py-2">
+							{sorted.map((event) => (
+								<div
+									key={event.id}
+									className="flex items-start justify-between gap-2 rounded-md border border-border bg-card/50 px-2 sm:px-2.5 py-1.5 sm:py-2"
+								>
 									<div className="flex items-start gap-2 min-w-0">
 										<span className="text-sm leading-none shrink-0">{eventEmoji(event.type, event.status)}</span>
 										<p className="text-[11px] sm:text-xs text-foreground break-words">{eventLabel(event)}</p>
@@ -258,7 +305,10 @@ export default function OpsPage() {
 					<Wrench className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
 					<h1 className="text-lg sm:text-xl font-semibold tracking-tight">Operations</h1>
 					<div className="ml-auto flex items-center gap-2">
-						<Link href="/ops/history" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+						<Link
+							href="/ops/history"
+							className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+						>
 							<ClipboardList className="h-3.5 w-3.5" />
 							<span className="hidden sm:inline">History</span>
 						</Link>
@@ -291,11 +341,11 @@ export default function OpsPage() {
 			) : (
 				<div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
 					<section className="space-y-4 lg:col-span-2">
-						{activeOps.map((op: OpsData) => <OpCard key={op.opId} op={op} />)}
+						{activeOps.map((op: OpsData) => (
+							<OpCard key={op.opId} op={op} />
+						))}
 					</section>
-					<aside className="lg:col-span-1">
-						{latestOp && <Timeline events={latestOp.events} />}
-					</aside>
+					<aside className="lg:col-span-1">{latestOp && <Timeline events={latestOp.events} />}</aside>
 				</div>
 			)}
 		</div>

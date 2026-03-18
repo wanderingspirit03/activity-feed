@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -67,10 +67,7 @@ export default function InterventionPanel({ opId, status }: InterventionPanelPro
 	};
 
 	return (
-		<form
-			onSubmit={handleSubmit}
-			className="rounded-lg border border-zinc-800 bg-zinc-950/80 p-3 shadow-sm"
-		>
+		<form onSubmit={handleSubmit} className="rounded-lg border border-zinc-800 bg-zinc-950/80 p-3 shadow-sm">
 			<textarea
 				rows={2}
 				value={message}
@@ -93,11 +90,7 @@ export default function InterventionPanel({ opId, status }: InterventionPanelPro
 						"disabled:cursor-not-allowed disabled:opacity-60",
 					)}
 				>
-					{isSending ? (
-						<Loader2 className="size-3.5 animate-spin" />
-					) : (
-						<ArrowRight className="size-3.5" />
-					)}
+					{isSending ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
 					<span>Send</span>
 				</button>
 			</div>

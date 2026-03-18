@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Activity,
 	AlertTriangle,
@@ -13,9 +12,10 @@ import {
 	WifiOff,
 	Wrench,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { useLiveStore, type RunData, type ActivityItem } from "@/stores/live-store";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type ActivityItem, type RunData, useLiveStore } from "@/stores/live-store";
 
 function formatTime(ts: number) {
 	const d = new Date(ts);
@@ -58,9 +58,7 @@ function EventIcon({ kind, className }: { kind: string; className?: string }) {
 function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean }) {
 	const [expanded, setExpanded] = useState(false);
 	const isRunning = item.status === "running";
-	const duration = item.completedAt
-		? formatDuration(item.completedAt - item.startedAt)
-		: null;
+	const duration = item.completedAt ? formatDuration(item.completedAt - item.startedAt) : null;
 
 	return (
 		<button
@@ -74,25 +72,21 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 		>
 			<div className="flex items-center gap-2 min-w-0">
 				<EventIcon kind={item.eventKind} className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
-				<span className="font-mono text-sm text-neutral-300 shrink-0">
-					{item.title || item.toolName || "tool"}
-				</span>
+				<span className="font-mono text-sm text-neutral-300 shrink-0">{item.title || item.toolName || "tool"}</span>
 				{!expanded && item.toolArgs && item.toolArgs !== item.title && (
-					<span className="text-xs text-neutral-500 truncate min-w-0">
-						{item.toolArgs.slice(0, 80)}
-					</span>
+					<span className="text-xs text-neutral-500 truncate min-w-0">{item.toolArgs.slice(0, 80)}</span>
 				)}
 				<span className="ml-auto shrink-0 flex items-center gap-2">
-					{duration && (
-						<span className="text-xs text-neutral-500">{duration}</span>
-					)}
+					{duration && <span className="text-xs text-neutral-500">{duration}</span>}
 					{isRunning ? (
 						<span className="relative flex h-2 w-2">
 							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
 							<span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
 						</span>
 					) : item.status === "error" ? (
-						<Badge variant="destructive" className="text-[10px] px-1.5 py-0">error</Badge>
+						<Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+							error
+						</Badge>
 					) : (
 						<span className="h-2 w-2 rounded-full bg-emerald-500" />
 					)}
@@ -101,9 +95,7 @@ function ToolCard({ item, isLatest }: { item: ActivityItem; isLatest: boolean })
 
 			{expanded && item.toolArgs && (
 				<div className="mt-2 rounded bg-neutral-950 border border-neutral-800 p-2 overflow-x-auto max-h-48 overflow-y-auto">
-					<pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap break-all">
-						{item.toolArgs}
-					</pre>
+					<pre className="text-xs font-mono text-neutral-400 whitespace-pre-wrap break-all">{item.toolArgs}</pre>
 				</div>
 			)}
 			{expanded && item.result && (
@@ -126,9 +118,7 @@ function RunSection({ run }: { run: RunData }) {
 			<CardHeader className="pb-3 border-b border-neutral-800">
 				<div className="flex items-start justify-between gap-2 min-w-0">
 					<div className="min-w-0 flex-1">
-						<CardTitle className="text-base font-medium truncate">
-							{run.taskPreview || run.runId}
-						</CardTitle>
+						<CardTitle className="text-base font-medium truncate">{run.taskPreview || run.runId}</CardTitle>
 						<div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-neutral-500">
 							<span>{formatTime(run.startedAt)}</span>
 							<span>·</span>
@@ -137,10 +127,7 @@ function RunSection({ run }: { run: RunData }) {
 							<span>{tools.length} tools</span>
 						</div>
 					</div>
-					<Badge
-						variant={isActive ? "default" : "secondary"}
-						className={`shrink-0 ${isActive ? "bg-blue-600" : ""}`}
-					>
+					<Badge variant={isActive ? "default" : "secondary"} className={`shrink-0 ${isActive ? "bg-blue-600" : ""}`}>
 						{run.status || "unknown"}
 					</Badge>
 				</div>
@@ -149,13 +136,15 @@ function RunSection({ run }: { run: RunData }) {
 				{tools.length === 0 ? (
 					<p className="text-sm text-neutral-500 italic">Waiting for tool calls...</p>
 				) : (
-					tools.slice(-20).map((item, i, sliced) => (
-						<ToolCard
-							key={item.id || `${run.runId}-${i}`}
-							item={item}
-							isLatest={i === sliced.length - 1 && isActive}
-						/>
-					))
+					tools
+						.slice(-20)
+						.map((item, i, sliced) => (
+							<ToolCard
+								key={item.id || `${run.runId}-${i}`}
+								item={item}
+								isLatest={i === sliced.length - 1 && isActive}
+							/>
+						))
 				)}
 			</CardContent>
 		</Card>
@@ -216,9 +205,7 @@ export default function LivePage() {
 			<div className="flex items-center justify-between gap-4">
 				<div>
 					<h1 className="text-2xl md:text-3xl font-bold">Live</h1>
-					<p className="text-sm text-neutral-500 mt-1">
-						Real-time assistant activity stream.
-					</p>
+					<p className="text-sm text-neutral-500 mt-1">Real-time assistant activity stream.</p>
 					<div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
 						<span className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1">
 							{activeRuns.length} active runs
@@ -227,10 +214,7 @@ export default function LivePage() {
 							{activePhaseCount} active phases
 						</span>
 						{activePhaseCounts.map(([phase, count]) => (
-							<span
-								key={phase}
-								className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1 capitalize"
-							>
+							<span key={phase} className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1 capitalize">
 								{phase}: {count}
 							</span>
 						))}
@@ -294,9 +278,7 @@ export default function LivePage() {
 					<CardContent className="py-16 text-center">
 						<Activity className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
 						<p className="text-neutral-500">No active runs.</p>
-						<p className="text-xs text-neutral-600 mt-1">
-							Activity will appear here when tasks start.
-						</p>
+						<p className="text-xs text-neutral-600 mt-1">Activity will appear here when tasks start.</p>
 					</CardContent>
 				</Card>
 			)}
