@@ -69,11 +69,7 @@ type LiveStore = {
 function normalizeActivity(item: RawActivity): ActivityItem {
 	const startedAt = item.startedAt ?? item.timestamp ?? Date.now();
 	const inferredStatus: ActivityItem["status"] =
-		item.status === "error"
-			? "error"
-			: item.status === "success" || item.isActive === false
-				? "success"
-				: "running";
+		item.status === "error" ? "error" : item.status === "success" || item.isActive === false ? "success" : "running";
 
 	return {
 		id: item.id ?? `${item.toolName ?? "event"}-${startedAt}`,
@@ -129,7 +125,7 @@ export const useLiveStore = create<LiveStore>((set) => ({
 				nextRuns.set(incoming.runId, {
 					...existing,
 					...incoming,
-					tools: incoming.tools.length > 0 ? incoming.tools : existing?.tools ?? [],
+					tools: incoming.tools.length > 0 ? incoming.tools : (existing?.tools ?? []),
 				});
 				return { runs: nextRuns, lastEventAt: now };
 			}

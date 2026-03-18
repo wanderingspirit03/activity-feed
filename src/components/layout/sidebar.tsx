@@ -1,8 +1,8 @@
 "use client";
 
+import { BarChart3, Home, ListTodo, type LucideIcon, Radio, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, ListTodo, Radio, Settings, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 

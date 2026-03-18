@@ -1,8 +1,8 @@
 "use client";
 
+import { BarChart3, Home, ListTodo, type LucideIcon, Radio, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, ListTodo, Radio, Settings, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -44,7 +44,12 @@ export function BottomTabs() {
 							)}
 						>
 							<Icon className={cn("h-5 w-5", active && "text-primary")} />
-							<span className={cn("text-[10px] leading-tight", active ? "font-medium text-primary" : "text-muted-foreground")}>
+							<span
+								className={cn(
+									"text-[10px] leading-tight",
+									active ? "font-medium text-primary" : "text-muted-foreground",
+								)}
+							>
 								{label}
 							</span>
 						</Link>

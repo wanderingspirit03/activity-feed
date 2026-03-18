@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 
 import "./globals.css";
 
+import { Providers } from "@/app/providers";
 import { BottomTabs } from "@/components/layout/bottom-tabs";
 import { Sidebar } from "@/components/layout/sidebar";
-import { Providers } from "@/app/providers";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -28,9 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
 						</aside>
 
 						{/* Main content */}
-						<main className="flex-1 min-w-0 overflow-x-hidden pb-20 md:pb-0">
-							{children}
-						</main>
+						<main className="flex-1 min-w-0 overflow-x-hidden pb-20 md:pb-0">{children}</main>
 					</div>
 
 					{/* Bottom tabs — mobile only */}

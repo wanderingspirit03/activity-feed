@@ -10,9 +10,6 @@ export async function GET() {
 		const data = await getScores();
 		return NextResponse.json(data);
 	} catch (error) {
-		return NextResponse.json(
-			{ error: "Failed to load scores", detail: String(error) },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to load scores", detail: String(error) }, { status: 500 });
 	}
 }

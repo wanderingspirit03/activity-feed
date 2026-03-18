@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { fileURLToPath, parse } from "node:url";
-import next from "next";
 import Redis from "ioredis";
+import next from "next";
 import { WebSocket, WebSocketServer } from "ws";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -184,9 +184,22 @@ function translateEvent(raw: Record<string, string>, streamId: string): Activity
 		case "run.start":
 			return { ...base, phase: "queued", title: "Starting to work on your request…", icon: "rocket", progress: 5 };
 		case "llm.start":
-			return { ...base, phase: "understanding", title: "Thinking about your request…", icon: "brain", progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				phase: "understanding",
+				title: "Thinking about your request…",
+				icon: "brain",
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "llm.done":
-			return { ...base, phase: "working", title: "Figured out the next step…", icon: "lightbulb", isActive: false, progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				phase: "working",
+				title: "Figured out the next step…",
+				icon: "lightbulb",
+				isActive: false,
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "tool.start": {
 			const toolName = raw.toolName || raw["data.toolName"] || "";
 			const toolArgs = raw.toolArgs || "";
@@ -217,17 +230,47 @@ function translateEvent(raw: Record<string, string>, streamId: string): Activity
 			};
 		}
 		case "tool.error":
-			return { ...base, title: "Hit a small bump — working around it…", icon: "alert-triangle", progress: currentProgress };
+			return {
+				...base,
+				title: "Hit a small bump — working around it…",
+				icon: "alert-triangle",
+				progress: currentProgress,
+			};
 		case "subagent.spawn":
-			return { ...base, title: "A specialist is helping out…", icon: "users", progress: Math.min(currentProgress + 5, 95) };
+			return {
+				...base,
+				title: "A specialist is helping out…",
+				icon: "users",
+				progress: Math.min(currentProgress + 5, 95),
+			};
 		case "subagent.done":
-			return { ...base, title: "Specialist finished their part ✓", icon: "user-check", isActive: false, progress: Math.min(currentProgress + 10, 95) };
+			return {
+				...base,
+				title: "Specialist finished their part ✓",
+				icon: "user-check",
+				isActive: false,
+				progress: Math.min(currentProgress + 10, 95),
+			};
 		case "run.done": {
 			const status = raw.status || raw["data.status"] || "ok";
 			if (status === "ok" || status === "done") {
-				return { ...base, phase: "complete", title: "All done! ✓", icon: "check-circle", isActive: false, progress: 100 };
+				return {
+					...base,
+					phase: "complete",
+					title: "All done! ✓",
+					icon: "check-circle",
+					isActive: false,
+					progress: 100,
+				};
 			}
-			return { ...base, phase: "error", title: "Something went wrong — we're on it", icon: "alert-triangle", isActive: false, progress: currentProgress };
+			return {
+				...base,
+				phase: "error",
+				title: "Something went wrong — we're on it",
+				icon: "alert-triangle",
+				isActive: false,
+				progress: currentProgress,
+			};
 		}
 		default:
 			return null;
@@ -299,7 +342,8 @@ function processEvent(fields: string[], streamId: string) {
 
 	// Handle run.start — create the run
 	if (type === "run.start") {
-		const task = raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
+		const task =
+			raw.task || parsedData?.payload?.task || parsedData?.task || raw["data.task"] || "Working on something…";
 		const newRun: RunOverview = {
 			runId,
 			task,
